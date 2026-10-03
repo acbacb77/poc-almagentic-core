@@ -48,12 +48,21 @@ bot_email="${bot_id}+${AGENT_APP_SLUG}[bot]@users.noreply.github.com"
 
 echo "Agente: $bot_name · repo: $AGENT_REPO · token válido hasta $expires"
 
+# El agente no hereda ninguna credencial del humano. VS Code reenvía al contenedor
+# el helper de credenciales de git, su askpass y el agente SSH del host: con ellos
+# el agente podría hacer push con TU identidad (y tu bypass de administrador).
+unset SSH_AUTH_SOCK GIT_ASKPASS SSH_ASKPASS VSCODE_GIT_ASKPASS_MAIN VSCODE_GIT_ASKPASS_NODE \
+      VSCODE_GIT_ASKPASS_EXTRA_ARGS VSCODE_GIT_IPC_HANDLE GITHUB_TOKEN
+export GIT_SSH_COMMAND="false"   # sin SSH: solo HTTPS con el token del bot
+export GIT_TERMINAL_PROMPT=0
+
 export GH_TOKEN="$token"
 export GIT_AUTHOR_NAME="$bot_name" GIT_COMMITTER_NAME="$bot_name"
 export GIT_AUTHOR_EMAIL="$bot_email" GIT_COMMITTER_EMAIL="$bot_email"
-# Credenciales de git solo para este proceso: se vacía cualquier helper previo y se usa el token del bot.
+# Credenciales de git solo para este proceso: se vacía la lista de helpers
+# (incluido el de VS Code) y se añade uno que devuelve el token del bot.
 export GIT_CONFIG_COUNT=2
-export GIT_CONFIG_KEY_0="credential.https://github.com.helper" GIT_CONFIG_VALUE_0=""
+export GIT_CONFIG_KEY_0="credential.helper" GIT_CONFIG_VALUE_0=""
 export GIT_CONFIG_KEY_1="credential.https://github.com.helper"
 export GIT_CONFIG_VALUE_1='!f() { echo username=x-access-token; echo "password=$GH_TOKEN"; }; f'
 
