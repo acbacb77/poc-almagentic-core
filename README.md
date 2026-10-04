@@ -24,6 +24,7 @@ jobs:
 
 ```
 .github/workflows/
+  reusable-triage.yml         # agente de triage de peticiones (tarea A)
   reusable-ci.yml             # build, tests, lint (tarea 6)
   reusable-security.yml       # Semgrep, Trivy, gitleaks (tarea 7)
   reusable-agent-review.yml   # revisor con permisos mínimos (tarea 8)
@@ -33,7 +34,25 @@ jobs:
 agent-standards/              # reglas, constitución y permisos base (tarea 3)
 prompts/                      # instrucciones del revisor y del triage (tareas 8, A)
 policies/                     # reglas para revisar la config del agente (tarea 7)
+scripts/triage/               # prompt builder, esquema y aplicación del triage (tarea A)
 scripts/traceability/         # generador del informe (tarea E)
+```
+
+## Triage de peticiones
+
+`reusable-triage.yml` separa **pensar** de **actuar**:
+
+| Job | Quién | Permisos | Qué hace |
+|---|---|---|---|
+| `analyze` | Claude (modelo sin herramientas) | Leer issues | Lee la petición y devuelve un JSON con tipo, prioridad, tamaño, criterios, duplicados y riesgos |
+| `apply` | Script determinista | Escribir issues | Valida el JSON contra listas cerradas, neutraliza el texto y aplica etiquetas y comentario |
+
+El texto de la petición nunca pasa por la shell ni por expresiones `${{ }}`. Si contiene una prompt injection, lo peor que consigue es una propuesta mal clasificada que revisa un humano; el modelo no puede añadir `aprobado` ni mencionar a nadie.
+
+Requiere en el repo que lo llama el secreto `CLAUDE_CODE_OAUTH_TOKEN`, generado con `claude setup-token`.
+
+```bash
+python3 -m pytest scripts/triage agent-standards/hooks -q   # tests
 ```
 
 ## Repos de la POC

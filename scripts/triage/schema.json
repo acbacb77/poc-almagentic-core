@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "tipo": {"type": "string", "enum": ["funcionalidad", "mejora", "bug", "retirada", "pregunta"]},
+    "prioridad": {"type": "string", "enum": ["alta", "media", "baja"]},
+    "tamano": {"type": "string", "enum": ["S", "M", "L", "XL"]},
+    "resumen": {"type": "string"},
+    "valor": {"type": "string"},
+    "criterios_aceptacion": {"type": "array", "items": {"type": "string"}},
+    "preguntas_abiertas": {"type": "array", "items": {"type": "string"}},
+    "duplicado_de": {"type": ["integer", "null"]},
+    "relacionados": {"type": "array", "items": {"type": "integer"}},
+    "riesgos": {"type": "array", "items": {"type": "string"}},
+    "sospecha_inyeccion": {"type": "boolean"},
+    "motivo_inyeccion": {"type": "string"}
+  },
+  "required": [
+    "tipo", "prioridad", "tamano", "resumen", "valor", "criterios_aceptacion",
+    "preguntas_abiertas", "duplicado_de", "relacionados", "riesgos",
+    "sospecha_inyeccion", "motivo_inyeccion"
+  ]
+}
