@@ -10,21 +10,23 @@
 #   AGENT_APP_ID     ID de la GitHub App
 #   AGENT_APP_SLUG   nombre de la App, p. ej. almagentic-agent
 #   AGENT_REPO       owner/repo donde trabajará el agente
-#   AGENT_KEY_FILE   ruta a la clave .pem (por defecto /run/secrets/agent.pem)
+#   AGENT_KEY_FILE   ruta a la clave .pem (por defecto /run/secrets/agent/agent.pem)
 set -euo pipefail
 
 : "${AGENT_APP_ID:?Define AGENT_APP_ID}"
 : "${AGENT_APP_SLUG:?Define AGENT_APP_SLUG}"
 : "${AGENT_REPO:?Define AGENT_REPO (owner/repo)}"
-KEY_FILE="${AGENT_KEY_FILE:-/run/secrets/agent.pem}"
+KEY_FILE="${AGENT_KEY_FILE:-/run/secrets/agent/agent.pem}"
 API="https://api.github.com"
 
-if [[ -d "$KEY_FILE" ]]; then
-  echo "$KEY_FILE es un directorio vacío: Docker no encontró la clave en tu máquina al crear el contenedor." >&2
-  echo "Copia el .pem a ~/.config/almagentic/agent.pem (en el sistema desde el que abres el repo) y usa 'Dev Containers: Rebuild Container'." >&2
+if [[ ! -f "$KEY_FILE" || ! -r "$KEY_FILE" ]]; then
+  echo "No encuentro la clave de la App en $KEY_FILE." >&2
+  echo "Ponla en la carpeta .config/almagentic/agent/ de tu usuario, con el nombre agent.pem:" >&2
+  echo "  - repo abierto desde Windows o desde /mnt/c en WSL: %USERPROFILE%\\.config\\almagentic\\agent\\agent.pem" >&2
+  echo "  - repo dentro de WSL, Linux o macOS:                ~/.config/almagentic/agent/agent.pem" >&2
+  echo "La carpeta se monta en vivo: no hace falta reconstruir el contenedor." >&2
   exit 1
 fi
-[[ -f "$KEY_FILE" && -r "$KEY_FILE" ]] || { echo "No encuentro la clave de la App en $KEY_FILE" >&2; exit 1; }
 if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
   echo "Aviso: ANTHROPIC_API_KEY está definida; Claude Code la usará en lugar de tu suscripción." >&2
 fi
