@@ -80,7 +80,7 @@ function table(rows) {
   const avg = header.map((_, i) => [header, ...body].reduce((s, r) => s + Math.min((r[i] || "").length, 60), 0) / (body.length + 1));
   const weights = avg.map((a, i) => Math.max(a, 5) + Math.min(lens[i], 12) * 0.3);
   const total = weights.reduce((a, b) => a + b, 0);
-  let widths = weights.map(w => Math.max(700, Math.round(CONTENT_W * w / total)));
+  let widths = weights.map((w, i) => Math.max(700, Math.min(...header[i].split(" ").map(x => x.length)) * 150 + 250, Math.round(CONTENT_W * w / total)));
   const diff = CONTENT_W - widths.reduce((a, b) => a + b, 0);
   widths[widths.indexOf(Math.max(...widths))] += diff;
   const border = { style: BorderStyle.SINGLE, size: 4, color: LINE };
@@ -123,7 +123,7 @@ function figure(caption, file) {
   const scale = Math.min(maxW / w, maxH / h);
   figN++;
   return [
-    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 200, after: 60 }, keepNext: true,
+    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 200, after: 60, line: 240, lineRule: "auto" }, keepNext: true,
       children: [new ImageRun({ type: "png", data: png, transformation: { width: Math.round(w * scale), height: Math.round(h * scale) },
         altText: { title: caption, description: caption, name: path.basename(file) } })] }),
     new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 240 },
@@ -174,7 +174,7 @@ function parse(md) {
     }
     if (/^\d+\. /.test(l)) {
       const ref = "num" + (numRefs.length);
-      numRefs.push(ref);
+      numRefs.push({ ref, start: parseInt(l, 10) }); // respeta el número inicial (p. ej. una lista que sigue tras un bloque de código)
       while (i < lines.length && /^\d+\. /.test(lines[i])) {
         out.push(new Paragraph({ numbering: { reference: ref, level: 0 }, spacing: { after: 60 }, children: inline(lines[i].replace(/^\d+\. /, "")) }));
         i++;
@@ -225,8 +225,8 @@ const numbering = {
       { level: 0, format: LevelFormat.BULLET, text: "•", alignment: AlignmentType.LEFT, style: { paragraph: { indent: { left: 540, hanging: 270 } } } },
       { level: 1, format: LevelFormat.BULLET, text: "–", alignment: AlignmentType.LEFT, style: { paragraph: { indent: { left: 1000, hanging: 270 } } } },
     ] },
-    ...numRefs.map(ref => ({ reference: ref, levels: [
-      { level: 0, format: LevelFormat.DECIMAL, text: "%1.", alignment: AlignmentType.LEFT, style: { paragraph: { indent: { left: 540, hanging: 320 } } } },
+    ...numRefs.map(({ ref, start }) => ({ reference: ref, levels: [
+      { level: 0, format: LevelFormat.DECIMAL, text: "%1.", start, alignment: AlignmentType.LEFT, style: { paragraph: { indent: { left: 540, hanging: 320 } } } },
     ] })),
   ],
 };
@@ -237,7 +237,7 @@ const doc = new Document({
   description: META.tipo,
   features: { updateFields: true },
   styles: {
-    default: { document: { run: { font: FONT, size: 22, color: "1F2A27" }, paragraph: { spacing: { line: 288 } } } },
+    default: { document: { run: { font: FONT, size: 22, color: "1F2A27" }, paragraph: { spacing: { line: 288, lineRule: "auto" } } } },
     paragraphStyles: [
       { id: "Heading1", name: "Heading 1", basedOn: "Normal", next: "Normal", quickFormat: true,
         run: { size: 36, bold: true, color: ACCENT, font: FONT }, paragraph: { spacing: { before: 0, after: 240 }, outlineLevel: 0 } },
