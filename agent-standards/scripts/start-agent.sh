@@ -19,7 +19,12 @@ set -euo pipefail
 KEY_FILE="${AGENT_KEY_FILE:-/run/secrets/agent.pem}"
 API="https://api.github.com"
 
-[[ -r "$KEY_FILE" ]] || { echo "No encuentro la clave de la App en $KEY_FILE" >&2; exit 1; }
+if [[ -d "$KEY_FILE" ]]; then
+  echo "$KEY_FILE es un directorio vacío: Docker no encontró la clave en tu máquina al crear el contenedor." >&2
+  echo "Copia el .pem a ~/.config/almagentic/agent.pem (en el sistema desde el que abres el repo) y usa 'Dev Containers: Rebuild Container'." >&2
+  exit 1
+fi
+[[ -f "$KEY_FILE" && -r "$KEY_FILE" ]] || { echo "No encuentro la clave de la App en $KEY_FILE" >&2; exit 1; }
 if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
   echo "Aviso: ANTHROPIC_API_KEY está definida; Claude Code la usará en lugar de tu suscripción." >&2
 fi
