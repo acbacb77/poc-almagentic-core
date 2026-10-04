@@ -6,11 +6,12 @@ Documento Word de la POC para el Trabajo Fin de Máster. Es un documento vivo: s
 |---|---|
 | `tfm.md` | Contenido (fuente de verdad). Se edita aquí |
 | `build_tfm.js` | Genera el `.docx` con portada, índice, cabecera y pie |
-| `figuras/*.dot` | Diagramas en Graphviz; `*.png` se generan con `dot -Tpng -Gdpi=200` |
+| `figuras/src/*.architecture.json` | Especificaciones de los diagramas (archify, tipo *architecture* con posiciones fijas para que quepan en A4; validadas con el perfil *showcase*) |
+| `figuras/build_figuras.sh` | Valida cada diagrama, genera su HTML interactivo y exporta el PNG que usa el `.docx` |
 | `TFM-ALM-agentico.docx` | Documento generado (entregable) |
 
 ```bash
-cd docs/tfm/figuras && for f in *.dot; do dot -Tpng -Gdpi=200 "$f" -o "${f%.dot}.png"; done && cd ../../..
+docs/tfm/figuras/build_figuras.sh   # requiere archify (ver cabecera del script), Playwright y Pillow
 node docs/tfm/build_tfm.js
 ```
 

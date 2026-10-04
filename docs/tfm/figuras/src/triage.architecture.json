@@ -1,0 +1,222 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Triage: pensar y actuar por separado",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "external": {
+          "label": "Persona o entrada"
+        },
+        "backend": {
+          "label": "Agente o proceso"
+        },
+        "security": {
+          "label": "Control o aprobación"
+        },
+        "frontend": {
+          "label": "Artefacto en GitHub"
+        },
+        "database": {
+          "label": "Estado en git"
+        },
+        "messagebus": {
+          "label": "Bot de promoción"
+        },
+        "cloud": {
+          "label": "Clúster"
+        }
+      }
+    }
+  },
+  "components": [
+    {
+      "id": "issue",
+      "type": "external",
+      "label": "Issue",
+      "sublabel": "«Petición», no confiable",
+      "pos": [
+        40,
+        50
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "prompt",
+      "type": "backend",
+      "label": "build_prompt",
+      "sublabel": "marca el texto como datos",
+      "pos": [
+        40,
+        190
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "modelo",
+      "type": "backend",
+      "label": "Claude",
+      "sublabel": "sin herramientas",
+      "pos": [
+        260,
+        190
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "aplica",
+      "type": "security",
+      "label": "apply.py",
+      "sublabel": "valida y neutraliza",
+      "pos": [
+        260,
+        330
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "salida",
+      "type": "frontend",
+      "label": "Propuesta",
+      "sublabel": "etiquetas y comentario",
+      "pos": [
+        480,
+        330
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "decide",
+      "type": "security",
+      "label": "aprobado",
+      "sublabel": "decide el responsable",
+      "pos": [
+        480,
+        470
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "manual",
+      "type": "security",
+      "label": "triage:manual",
+      "sublabel": "sin clasificar",
+      "pos": [
+        260,
+        470
+      ],
+      "size": [
+        140,
+        56
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Usuario",
+      "wraps": [
+        "issue"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Job analyze",
+      "wraps": [
+        "prompt",
+        "modelo"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Job apply",
+      "wraps": [
+        "aplica",
+        "salida"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "Fallo seguro",
+      "wraps": [
+        "manual"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Responsable",
+      "wraps": [
+        "decide"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "issue-prompt",
+      "from": "issue",
+      "to": "prompt",
+      "label": "colaborador",
+      "labelAt": [
+        110,
+        148
+      ]
+    },
+    {
+      "id": "prompt-modelo",
+      "from": "prompt",
+      "to": "modelo"
+    },
+    {
+      "id": "modelo-aplica",
+      "from": "modelo",
+      "to": "aplica",
+      "label": "JSON con esquema",
+      "labelAt": [
+        330,
+        288
+      ]
+    },
+    {
+      "id": "aplica-salida",
+      "from": "aplica",
+      "to": "salida",
+      "label": "listas cerradas"
+    },
+    {
+      "id": "salida-decide",
+      "from": "salida",
+      "to": "decide"
+    },
+    {
+      "id": "aplica-manual",
+      "from": "aplica",
+      "to": "manual",
+      "label": "inválido o error",
+      "variant": "security",
+      "labelAt": [
+        330,
+        428
+      ]
+    }
+  ]
+}

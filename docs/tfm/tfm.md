@@ -50,11 +50,38 @@ Los objetivos específicos son:
 
 ## Metodología
 
-El trabajo se ha hecho de forma iterativa, conversando con un asistente de IA (Claude) que actúa como ingeniero de plataforma. El asistente investiga, propone, implementa en los repositorios mediante *pull requests* y corrige a partir de la revisión humana. El autor decide, revisa y aprueba cada cambio. El plan se dividió en 17 tareas: 12 principales y 5 extensiones ALM que se añadieron para cubrir el ciclo completo. El capítulo 6 recoge el registro completo de iteraciones.
+El trabajo avanza tarea a tarea, y en cada una intervienen dos papeles:
+
+| Papel | Quién | Qué hace |
+|---|---|---|
+| Autor | Persona que realiza el TFM | Plantea la tarea, revisa y aprueba cada cambio, y hace la configuración que la sesión del asistente no puede hacer (protección de ramas, etiquetas de versión, secretos) |
+| Asistente | Claude, como ingeniero de plataforma | Investiga en la documentación oficial y en la web, implementa en una rama, abre el PR e incorpora las correcciones |
+
+Todas las tareas siguen el mismo ciclo:
+
+![Figura 1. Ciclo de trabajo de cada tarea: el asistente implementa en un PR y el autor lo aprueba o pide cambios.](figuras/ciclo.png)
+
+| Aspecto | Cómo se organiza |
+|---|---|
+| Plan | 17 tareas: 12 principales y 5 extensiones ALM (A a E), detalladas en el capítulo 4 |
+| Seguimiento | Bitácora versionada y panel de avance en `poc-almagentic-core`; esta memoria se regenera al cerrar cada tarea |
+| Registro | El capítulo 6 recoge todas las iteraciones con el asistente |
 
 ## Estructura del documento
 
-El capítulo 2 define el problema y el capítulo 3 revisa el estado del arte. El capítulo 4 presenta el diseño de la solución y sus decisiones, y el capítulo 5 la implementación. El capítulo 6 recoge las iteraciones con los modelos, las pruebas y los resultados. El capítulo 7 es la guía técnica para reproducir la POC y el capítulo 8 reúne las conclusiones y el trabajo futuro.
+Cada capítulo responde a uno de los requisitos de la entrega:
+
+| Capítulo | Contenido | Requisito de la entrega |
+|---|---|---|
+| 1. Introducción | Contexto, motivación, objetivos, alcance y metodología | Claridad en el problema |
+| 2. Definición del problema | Cambio del SDLC, riesgos de la capa agéntica y reto concreto | Claridad en el problema |
+| 3. Estado del arte | Modelos de ciclo de vida, herramientas y seguridad en CI/CD | Claridad en el problema |
+| 4. Diseño de la solución | Requisitos, decisiones, arquitectura, identidades, gobierno y plan | Proceso de diseño y desarrollo |
+| 5. Desarrollo e implementación | Lo construido en cada tarea | Proceso de diseño y desarrollo |
+| 6. Iteraciones con modelos, pruebas y resultados | Registro de la conversación, pruebas, incidencias y métricas | Iteraciones, pruebas y resultados |
+| 7. Documentación técnica reproducible | Requisitos previos, pasos, estructura y solución de problemas | Documentación técnica reproducible |
+| 8. Conclusiones y trabajo futuro | Conclusiones y líneas abiertas | Cierre |
+| Anexos A y B | Glosario y extractos de código | Documentación técnica reproducible |
 
 # Definición del problema
 
@@ -203,7 +230,9 @@ La solución se reparte en tres repositorios con responsabilidades y permisos di
 | `poc-almagentic-core` | Workflows reutilizables, estándares de agentes, documentación | Solo humanos |
 | `poc-almagentic-gitops` | Estado deseado del cluster (Argo CD) | Un bot abre PRs; un humano aprueba |
 
-![Figura 1. Arquitectura de la POC: repositorios, identidades y flujo de cambios.](figuras/arquitectura.png)
+La figura 2 sigue un cambio desde que el agente abre el PR hasta que Argo CD lo despliega en *staging*. El responsable aprueba en dos puntos: el merge del código en app y el merge de la promoción en gitops.
+
+![Figura 2. Flujo de un cambio por los tres repositorios, desde el PR del agente hasta la sincronización de Argo CD.](figuras/flujo-cambio.png)
 
 Los controles viven en un repositorio al que el agente no tiene acceso. Los workflows de CI, seguridad y triage están en core y la aplicación los llama por versión (`@v1`), de modo que el agente puede proponer cambios en app pero no puede alterar las comprobaciones que se ejecutan sobre ellos.
 
@@ -258,9 +287,9 @@ Un hallazgo temprano condicionó el diseño: GitHub no permite aprobar un PR pro
 
 ## Tarea 3: el harness del agente
 
-El *harness* es el conjunto de controles que rodean al agente de código. Tiene siete capas, desde las que solo orientan al agente hasta las que impone la plataforma:
+El *harness* es el conjunto de controles que rodean al agente de código. Tiene siete capas, desde las que solo orientan al agente hasta las que impone la plataforma. La figura 3 sigue el camino de una acción: el contexto orienta al agente, los permisos y el hook pueden bloquearla en local, y GitHub aplica la identidad y la protección de la rama cuando la acción llega al repositorio.
 
-![Figura 2. Las siete capas del harness, de la guía al control impuesto por la plataforma.](figuras/capas.png)
+![Figura 3. Capas del harness en el camino de una acción del agente. Las capas 3 a 5 actúan en Claude Code y las capas 6 y 7 en GitHub.](figuras/harness.png)
 
 | Capa | Dónde | Qué impone | ¿La impone GitHub? |
 |---|---|---|---|
@@ -302,7 +331,7 @@ Las peticiones llegan como issues con una plantilla estructurada que pregunta qu
 
 Una petición es texto escrito por un usuario, así que el triage es la vía de entrada de los ataques de inyección descritos en el capítulo 3. Por eso el diseño separa pensar de actuar:
 
-![Figura 3. Flujo del triage: el modelo propone sin herramientas y un script determinista valida y aplica.](figuras/triage.png)
+![Figura 4. Flujo del triage: el modelo propone sin herramientas y un script determinista valida y aplica.](figuras/triage.png)
 
 | Job | Quién | Permisos | Qué hace |
 |---|---|---|---|
@@ -412,6 +441,8 @@ El registro que sigue resume toda la conversación del proyecto. Se han omitido 
 | 39 | «Cambia el diseño para que se diferencie que A, B, C están dentro de las tareas 1, 2, 3.» | Las extensiones ALM se muestran como ramas de la línea principal | |
 | 40 | Eliminar las leyendas | Simplifica el panel | |
 | 41 | Este documento | Crea la memoria del TFM, generada desde una fuente versionada | Documento vivo |
+| 42 | «Usa siempre la skill humanizer para escribir el documento y el tfm.md; si hace falta, haz una primera pasada con el contenido que ya existe.» | Reescribe la prosa sin cambiar datos (contrastes, negritas de etiqueta, rayas, cierres enfáticos). Al revisar el documento corrige una figura que salía recortada y la numeración de una lista | Regla de estilo permanente |
+| 43 | «Los apartados de metodología y estructura del documento son texto puro; se pueden estructurar mejor.» y «Recuerda que también tienes la skill archify para generar diagramas más profesionales.» | Convierte ambos apartados en tablas y añade una figura del ciclo de trabajo. Rehace las figuras con archify a partir de especificaciones JSON validadas. Al revisar el documento ve que el texto de los diagramas queda en unos 4 a 6 pt, porque el tipo *workflow* ocupa siempre seis columnas, y los rediseña con posiciones fijas para que se lean a tamaño de página. También corrige la figura del harness para que no atribuya a los permisos un registro que solo hace el hook | Cuatro figuras legibles y regenerables con un script |
 
 ## Pruebas realizadas y resultados
 
@@ -462,7 +493,7 @@ El caso de inyección prueba el diseño en dos niveles. El modelo detectó el in
 | Tareas completadas | 4 de 17 (1, 2, 3 y A) |
 | PRs fusionados | 8 (4 en core y 4 en app), más la documentación |
 | Pruebas automáticas | 57 superadas |
-| Iteraciones registradas con el asistente | 41 |
+| Iteraciones registradas con el asistente | 43 |
 | Problemas de entorno resueltos | 10 |
 | Vulnerabilidades de diseño detectadas antes de explotarse | 2 (aprobación imposible sin identidad propia; herencia de credenciales) |
 

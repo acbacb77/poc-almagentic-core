@@ -1,0 +1,162 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Ciclo de trabajo con el asistente",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "external": {
+          "label": "Autor"
+        },
+        "backend": {
+          "label": "Asistente (Claude)"
+        },
+        "frontend": {
+          "label": "GitHub"
+        },
+        "database": {
+          "label": "GitHub (rama main)"
+        }
+      }
+    },
+    "viewBox": [
+      630,
+      424
+    ]
+  },
+  "components": [
+    {
+      "id": "pregunta",
+      "type": "external",
+      "label": "Plantea la tarea",
+      "sublabel": "define la intención",
+      "pos": [
+        30,
+        40
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "investiga",
+      "type": "backend",
+      "label": "Investiga",
+      "sublabel": "docs oficiales y web",
+      "pos": [
+        220,
+        40
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "implementa",
+      "type": "backend",
+      "label": "Implementa",
+      "sublabel": "o corrige, en una rama",
+      "pos": [
+        410,
+        40
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "pr",
+      "type": "frontend",
+      "label": "Pull request",
+      "sublabel": "cambio revisable",
+      "pos": [
+        410,
+        170
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "revisa",
+      "type": "external",
+      "label": "Revisa",
+      "sublabel": "aprueba o corrige",
+      "pos": [
+        410,
+        300
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "merge",
+      "type": "database",
+      "label": "Merge en main",
+      "sublabel": "cambio aceptado",
+      "pos": [
+        220,
+        300
+      ],
+      "size": [
+        140,
+        56
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "pregunta-investiga",
+      "from": "pregunta",
+      "to": "investiga"
+    },
+    {
+      "id": "investiga-implementa",
+      "from": "investiga",
+      "to": "implementa"
+    },
+    {
+      "id": "implementa-pr",
+      "from": "implementa",
+      "to": "pr",
+      "label": "push + PR",
+      "labelAt": [
+        480,
+        133
+      ]
+    },
+    {
+      "id": "pr-revisa",
+      "from": "pr",
+      "to": "revisa"
+    },
+    {
+      "id": "revisa-merge",
+      "from": "revisa",
+      "to": "merge",
+      "label": "aprueba",
+      "variant": "emphasis"
+    },
+    {
+      "id": "revisa-implementa",
+      "from": "revisa",
+      "to": "implementa",
+      "label": "pide cambios",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "right",
+      "labelAt": [
+        574,
+        263
+      ]
+    }
+  ]
+}

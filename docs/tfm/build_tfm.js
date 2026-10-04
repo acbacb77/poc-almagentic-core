@@ -119,7 +119,7 @@ let figN = 0;
 function figure(caption, file) {
   const png = fs.readFileSync(path.join(DIR, file));
   const w = png.readUInt32BE(16), h = png.readUInt32BE(20);
-  const maxW = 600, maxH = 420; // px a 96 dpi aprox.
+  const maxW = 605, maxH = 700; // px a 96 dpi aprox. (ancho útil de la página; las figuras altas pueden ocupar casi una página)
   const scale = Math.min(maxW / w, maxH / h);
   figN++;
   return [
@@ -184,6 +184,7 @@ function parse(md) {
     // párrafo (referencias con [n] y URL sueltas)
     const isRef = /^\[\d+\]/.test(l);
     out.push(new Paragraph({
+      keepNext: !isRef && /:\s*$/.test(l), // la frase que presenta una figura, tabla o lista no se queda sola al pie
       spacing: { after: isRef ? 100 : 140, line: 288 },
       alignment: isRef ? AlignmentType.LEFT : AlignmentType.JUSTIFIED,
       indent: isRef ? { left: 480, hanging: 480 } : undefined,
