@@ -347,9 +347,48 @@ El diseño incluye otras cuatro medidas:
 
 La validación tiene 12 pruebas automáticas, que suman 57 con las del hook.
 
+## Tarea 4: especificación con Spec Kit
+
+La petición del catálogo de productos (issue #5) recibió una propuesta de triage con cinco preguntas abiertas. El responsable las contestó en un comentario y añadió la etiqueta `aprobado`. Las respuestas fijan el origen de los datos (un fichero del repositorio con 5 a 10 productos), el precio (euros, 2 decimales, IVA incluido), la ausencia de paginación y de autenticación, el formato del 404 y las rutas bajo `/api/v1`. También reformulan un criterio que no podía cumplirse tal como estaba escrito: con los datos en un fichero, un cambio de precio llega con un despliegue y no «al momento».
+
+### Spec Kit dentro del harness
+
+Spec Kit 1.1.0 se añadió al repositorio de app con `specify init` para la integración de Claude Code. Genera diez *skills* (`/speckit-specify`, `/speckit-plan`, `/speckit-tasks`, `/speckit-implement` y otras opcionales) y las plantillas y scripts de `.specify/`. Se instaló desde la etiqueta de GitHub porque el paquete de PyPI iba una versión por detrás, y se comprobó en una copia del repositorio que `specify init` no modificaba la constitución, `CLAUDE.md` ni los permisos.
+
+Los ficheros generados se versionan, de modo que el agente no instala nada. Pasan a formar parte del harness:
+
+| Elemento | Protección |
+|---|---|
+| *Skills* en `.claude/skills/` | Ya protegidas por el hook y los permisos, como todo `.claude/` |
+| Plantillas, scripts y configuración de `.specify/` | Reglas `deny` de edición en `settings.json` y CODEOWNERS sobre `.specify/` |
+| Scripts de Spec Kit | Permitido ejecutarlos (`.specify/scripts/bash/*`) y crear carpetas en `specs/` |
+
+El hook solo protege `.specify/memory/`, así que una escritura en las plantillas desde la shell no la bloquearía. Ese cambio aparecería en el PR y necesitaría la aprobación de Code Owners; la tarea 7 añadirá una comprobación de CI para cerrarlo.
+
+`AGENTS.md` describe el flujo en dos PRs: primero la spec, en una rama `spec/<issue>-<slug>`, y solo cuando está fusionada el plan, las tareas y el código en `feat/<issue>-<slug>`.
+
+### El sandbox no arrancaba en el devcontainer
+
+En el primer intento el agente no pudo ejecutar ningún comando. Bubblewrap, que aísla cada comando del agente, necesita crear *user namespaces*, y el perfil seccomp por defecto de Docker lo impide a un usuario sin privilegios:
+
+```
+bwrap: No permissions to create a new namespace, likely because the kernel
+does not allow non-privileged user namespaces.
+```
+
+Como el harness exige el sandbox (`failIfUnavailable`) y prohíbe ejecutar fuera de él (`allowUnsandboxedCommands: false`), el agente se quedó sin shell. No buscó otra vía: explicó el error, citó la regla del repositorio que le impide rodear un bloqueo y propuso dos salidas para que decidiera el responsable. Se eligió arrancar el contenedor con `--security-opt seccomp=unconfined`, que retira el filtro del contenedor exterior y mantiene el sandbox por comando, el que limita la red y oculta los secretos. Desactivar el sandbox se descartó porque eliminaba una capa.
+
+El fallo no había aparecido en las pruebas de la tarea 3 porque allí todos los bloqueos ocurrieron antes de ejecutar nada (en el contexto, los permisos o el hook) y ningún comando llegó al sandbox.
+
+### La spec generada
+
+Con el sandbox operativo, el agente leyó el issue, creó la rama, ejecutó `/speckit-specify` y abrió el PR #9 con dos ficheros: `specs/001-catalogo-productos/spec.md` y su checklist de calidad. La spec tiene tres historias de usuario priorizadas, 12 requisitos funcionales y 5 criterios de éxito medibles. Lo que el issue no fijaba (tipo del identificador, orden del listado, contenido inicial) aparece como supuesto explícito y no como requisito inventado. Dos requisitos vienen de la constitución y el PR lo indica: validar el catálogo antes de publicarlo y registrar métricas y logs por endpoint.
+
+El PR también señaló que el repositorio aún no tenía la aplicación base. El responsable decidió que la cree el PR de implementación de la tarea 5, aprobó la spec y la fusionó. Fue la primera vez que el flujo previsto se cumplió entero: el autor del PR era `almagentic-agent[bot]` y el responsable pudo aprobarlo con su cuenta, sin *bypass*.
+
 ## Tareas pendientes
 
-> Las secciones de las tareas 4 a 12 y de las extensiones B a E se añadirán a medida que se implementen: especificación con Spec Kit, implementación por el agente, CI, análisis de seguridad, agente revisor, cadena de suministro, despliegue GitOps, *releases*, operación, mantenimiento, retirada y trazabilidad.
+> Las secciones de las tareas 5 a 12 y de las extensiones B a E se añadirán a medida que se implementen: implementación por el agente, CI, análisis de seguridad, agente revisor, cadena de suministro, despliegue GitOps, *releases*, operación, mantenimiento, retirada y trazabilidad.
 
 # Iteraciones con modelos, pruebas y resultados
 
@@ -444,6 +483,16 @@ El registro que sigue resume toda la conversación del proyecto. Se han omitido 
 | 42 | «Usa siempre la skill humanizer para escribir el documento y el tfm.md; si hace falta, haz una primera pasada con el contenido que ya existe.» | Reescribe la prosa sin cambiar datos (contrastes, negritas de etiqueta, rayas, cierres enfáticos). Al revisar el documento corrige una figura que salía recortada y la numeración de una lista | Regla de estilo permanente |
 | 43 | «Los apartados de metodología y estructura del documento son texto puro; se pueden estructurar mejor.» y «Recuerda que también tienes la skill archify para generar diagramas más profesionales.» | Convierte ambos apartados en tablas y añade una figura del ciclo de trabajo. Rehace las figuras con archify a partir de especificaciones JSON validadas. Al revisar el documento ve que el texto de los diagramas queda en unos 4 a 6 pt, porque el tipo *workflow* ocupa siempre seis columnas, y los rediseña con posiciones fijas para que se lean a tamaño de página. También corrige la figura del harness para que no atribuya a los permisos un registro que solo hace el hook | Cuatro figuras legibles y regenerables con un script |
 
+### Fase 7 · Especificación con Spec Kit (5 de octubre)
+
+| # | Petición del autor | Respuesta y acción del modelo | Resultado |
+|---|---|---|---|
+| 44 | «Estábamos en el punto de responder al #5. Añado un comentario con la respuesta, ¿verdad? ¿Solo comento o cierro con el comentario?» | Aclara que el #5 es un issue y no un PR. Recomienda solo comentar: el issue se cierra con el PR de implementación y reabrirlo relanzaría el triage. Redacta las respuestas a las cinco preguntas | Respuestas publicadas en el issue |
+| 45 | «Comentado y aprobado» | Añade Spec Kit 1.1.0 (app#7) tras comprobar en una copia que no toca la constitución ni los permisos. Detecta su propio error: había propuesto rutas `/v1` cuando `AGENTS.md` exige `/api/v1`, y pide corregir el comentario | Spec Kit en el repo; ruta corregida |
+| 46 | Informe del agente: ningún comando arranca porque bubblewrap no puede crear *user namespaces* | Identifica el perfil seccomp de Docker como causa y abre app#8 con `seccomp=unconfined` y una comprobación. Descarta desactivar el sandbox | Sandbox operativo |
+| 47 | «Ya se ha ejecutado y ha creado una PR» | Revisa el PR #9 frente al issue y la constitución; propone que el esqueleto lo cree la tarea 5 | Spec aprobada por revisión normal |
+| 48 | «Merged» | Cierra la tarea 4: bitácora, panel y memoria | Tarea 4 cerrada |
+
 ## Pruebas realizadas y resultados
 
 ### Pruebas automáticas
@@ -462,6 +511,7 @@ El registro que sigue resume toda la conversación del proyecto. Se han omitido 
 | Prueba autorizada: `git push origin HEAD:main` | 4 · Hook | Bloqueado y registrado |
 | Prueba autorizada: `sed -i '$a prueba' AGENTS.md` | 4 · Hook | Bloqueado y registrado |
 | Prueba autorizada: `curl https://example.com` | 3 · Permisos | Bloqueado |
+| Sandbox no disponible en el contenedor (tarea 4) | 5 · Sandbox (`failIfUnavailable`) | Ningún comando se ejecuta; el agente no busca rodeos |
 
 Ante las peticiones directas el agente se negó por sí solo en la primera capa, sin intentar la acción. Las capas duras solo actúan cuando el agente sí lo intenta, así que para probarlas hubo que pedírselo de forma explícita como prueba autorizada.
 
@@ -485,19 +535,21 @@ El caso de inyección prueba el diseño en dos niveles. El modelo detectó el in
 | Clave montada como directorio | Montaje de ficheros en Docker Desktop para Windows | Montar la carpeta | Hay que probar en el entorno real del usuario |
 | Rutas de Windows desde WSL | Repo en `/mnt/c` | Documentado | El sistema de ficheros determina el comportamiento |
 | Error 401 en el triage | Token mal copiado | Validar antes de guardar | Los metadatos de la respuesta (coste 0) bastan para el diagnóstico |
+| Rutas `/v1` en la respuesta al issue | Error del asistente al redactarla | Corregir el comentario a `/api/v1` | Las respuestas a una petición deben contrastarse con `AGENTS.md` |
+| Sandbox sin *user namespaces* | Perfil seccomp por defecto de Docker | `seccomp=unconfined` en el devcontainer | Una capa sin probar en ejecución real puede estar rota; el fallo seguro lo hizo visible |
 
 ## Métricas del proceso
 
 | Métrica | Valor |
 |---|---|
-| Tareas completadas | 4 de 17 (1, 2, 3 y A) |
-| PRs fusionados | 8 (4 en core y 4 en app), más la documentación |
+| Tareas completadas | 5 de 17 (1, 2, 3, A y 4) |
+| PRs fusionados | 11 (4 en core y 7 en app, uno de ellos del agente), más la documentación |
 | Pruebas automáticas | 57 superadas |
-| Iteraciones registradas con el asistente | 43 |
-| Problemas de entorno resueltos | 10 |
+| Iteraciones registradas con el asistente | 48 |
+| Problemas de entorno resueltos | 11 |
 | Vulnerabilidades de diseño detectadas antes de explotarse | 2 (aprobación imposible sin identidad propia; herencia de credenciales) |
 
-> Este capítulo se ampliará con las iteraciones y pruebas de las tareas 4 a 12 y B a E.
+> Este capítulo se ampliará con las iteraciones y pruebas de las tareas 5 a 12 y B a E.
 
 # Documentación técnica reproducible
 
@@ -539,7 +591,26 @@ CLAUDE_CODE_OAUTH_TOKEN="$TOKEN" claude -p "Responde solo: OK"
 3. Guardarlo en app como secreto de Actions (no de Agents) con el nombre `CLAUDE_CODE_OAUTH_TOKEN`.
 4. Abrir un issue con la plantilla *Petición* y comprobar el comentario del triage.
 
-> Los pasos de las tareas 4 a 12 y B a E se añadirán al completarlas.
+### Tarea 4. Spec Kit y especificación
+
+1. Responder en el issue las preguntas abiertas del triage y añadir la etiqueta `aprobado`.
+2. Añadir Spec Kit a app (lo hace una persona, en una rama propia) y revisar que el diff no toque la constitución, `CLAUDE.md` ni `settings.json`:
+
+```
+uvx --from git+https://github.com/github/spec-kit.git@v1.1.0 \
+  specify init --here --force --integration claude --script sh
+```
+
+3. Arrancar el devcontainer con `"runArgs": ["--security-opt", "seccomp=unconfined"]` y comprobar el sandbox:
+
+```
+bwrap --ro-bind / / --dev /dev --unshare-user --unshare-net true && echo "sandbox OK"
+```
+
+4. Arrancar el agente y pedirle que lea el issue, cree `spec/<issue>-<slug>`, ejecute `/speckit-specify` y abra el PR solo con la spec.
+5. Revisar la spec frente al issue y aprobar el PR con la cuenta del responsable.
+
+> Los pasos de las tareas 5 a 12 y B a E se añadirán al completarlas.
 
 ## Estructura de los repositorios
 
@@ -573,6 +644,7 @@ poc-almagentic-gitops/
 | `start-agent.sh` falla con `$'\r'` | Saltos de línea de Windows; el `.gitattributes` del repo lo evita al volver a clonar |
 | Triage con `is_error: true` y coste 0 | Token inválido; regenerarlo y validarlo |
 | No se ven los artefactos de Actions | Están en la página *Summary* de la ejecución |
+| `bwrap: No permissions to create a new namespace` | Añadir `--security-opt seccomp=unconfined` a `runArgs` y reconstruir el contenedor |
 
 # Conclusiones y trabajo futuro
 

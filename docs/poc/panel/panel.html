@@ -505,44 +505,73 @@ const TASKS = [
   "id": "4",
   "title": "Spec de la feature con Spec Kit",
   "phase": "Demanda",
-  "status": "next",
-  "desc": "El agente escribe spec, plan y tareas del catálogo de productos a partir del issue aprobado.",
+  "status": "done",
+  "desc": "El agente escribe la spec del catálogo de productos con /speckit-specify a partir del issue aprobado; un humano la revisa y la aprueba en un PR propio.",
   "alm": null,
-  "prereqs": [],
+  "prereqs": [
+   [
+    "Preguntas abiertas del #5 respondidas en un comentario (rutas bajo /api/v1)",
+    true
+   ],
+   [
+    "Etiqueta aprobado en el #5",
+    true
+   ],
+   [
+    "Devcontainer reconstruido tras app#8 (sandbox operativo)",
+    true
+   ]
+  ],
   "subs": [
    [
-    "Responder las preguntas abiertas del #5",
-    "usuario",
-    false,
+    "Añadir Spec Kit v1.1.0 al repo (skills, plantillas y permisos)",
+    "claude",
+    true,
     [
      {
-      "label": "#5 Catálogo",
-      "href": "https://github.com/acbacb77/poc-almagentic-app/issues/5"
+      "label": "app#7",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/7"
      }
     ]
    ],
    [
-    "Añadir la etiqueta aprobado al #5",
+    "Fusionar app#7",
     "usuario",
-    false,
+    true,
     []
    ],
    [
-    "Añadir Spec Kit al devcontainer",
+    "Arreglar el sandbox del devcontainer (seccomp y user namespaces)",
     "claude",
-    false,
-    []
+    true,
+    [
+     {
+      "label": "app#8",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/8"
+     }
+    ]
    ],
    [
-    "Generar specs/001-catalogo-productos (spec, plan y tareas)",
-    "agente",
-    false,
-    []
-   ],
-   [
-    "Revisar y aprobar el PR de la spec",
+    "Fusionar app#8 y reconstruir el contenedor",
     "usuario",
-    false,
+    true,
+    []
+   ],
+   [
+    "Generar specs/001-catalogo-productos con /speckit-specify",
+    "agente",
+    true,
+    [
+     {
+      "label": "app#9",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/9"
+     }
+    ]
+   ],
+   [
+    "Revisar, aprobar y fusionar el PR de la spec",
+    "usuario",
+    true,
     []
    ]
   ]
@@ -551,25 +580,37 @@ const TASKS = [
   "id": "5",
   "title": "Implementación por el agente + tests",
   "phase": "Construcción",
-  "status": "todo",
-  "desc": "El agente implementa las tareas de la spec en el devcontainer y abre un PR firmado por el bot.",
+  "status": "next",
+  "desc": "El agente crea el esqueleto de la aplicación, genera plan y tareas con Spec Kit, implementa el catálogo con tests y abre un PR firmado por el bot.",
   "alm": null,
   "prereqs": [],
   "subs": [
    [
-    "Lanzar el agente sobre la spec aprobada",
+    "Lanzar el agente sobre la spec aprobada (rama feat/5-catalogo-productos)",
     "usuario",
     false,
     []
    ],
    [
-    "Implementar las tareas con sus tests",
+    "Generar plan y tareas con /speckit-plan y /speckit-tasks",
     "agente",
     false,
     []
    ],
    [
-    "Abrir el PR como almagentic-agent[bot]",
+    "Crear el esqueleto (pyproject, src/app/main.py con /health, tests)",
+    "agente",
+    false,
+    []
+   ],
+   [
+    "Implementar las tareas con sus tests (/speckit-implement)",
+    "agente",
+    false,
+    []
+   ],
+   [
+    "Abrir el PR como almagentic-agent[bot] con Closes #5",
     "agente",
     false,
     []
@@ -633,7 +674,7 @@ const TASKS = [
     []
    ],
    [
-    "Detectar ficheros generados y cambios en la config del agente",
+    "Detectar ficheros generados y cambios en la config del agente (incluido .specify/)",
     "claude",
     false,
     []
