@@ -1,0 +1,228 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Flujo de un cambio por los tres repositorios",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "external": {
+          "label": "Persona o entrada"
+        },
+        "backend": {
+          "label": "Agente o proceso"
+        },
+        "security": {
+          "label": "Control o aprobación"
+        },
+        "frontend": {
+          "label": "Artefacto en GitHub"
+        },
+        "database": {
+          "label": "Estado en git"
+        },
+        "messagebus": {
+          "label": "Bot de promoción"
+        },
+        "cloud": {
+          "label": "Clúster"
+        }
+      }
+    }
+  },
+  "components": [
+    {
+      "id": "agente",
+      "type": "backend",
+      "label": "Claude Code",
+      "sublabel": "harness de 7 capas",
+      "pos": [
+        40,
+        50
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "pr",
+      "type": "frontend",
+      "label": "PR del agente",
+      "sublabel": "código y specs",
+      "pos": [
+        40,
+        190
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "merge",
+      "type": "security",
+      "label": "Merge en main",
+      "sublabel": "aprueba el responsable",
+      "pos": [
+        260,
+        190
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "checks",
+      "type": "backend",
+      "label": "Workflows @v1",
+      "sublabel": "triage, CI, seguridad",
+      "pos": [
+        40,
+        330
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "promo",
+      "type": "messagebus",
+      "label": "PR de promoción",
+      "sublabel": "almagentic-promoter",
+      "pos": [
+        260,
+        470
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "despliegue",
+      "type": "security",
+      "label": "Merge en main",
+      "sublabel": "aprobar = desplegar",
+      "pos": [
+        480,
+        470
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "argocd",
+      "type": "cloud",
+      "label": "Argo CD",
+      "sublabel": "sincroniza el cluster",
+      "pos": [
+        480,
+        610
+      ],
+      "size": [
+        140,
+        56
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Devcontainer",
+      "wraps": [
+        "agente"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Repo app",
+      "wraps": [
+        "pr",
+        "merge"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "Repo core",
+      "wraps": [
+        "checks"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Repo gitops",
+      "wraps": [
+        "promo",
+        "despliegue"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Staging local",
+      "wraps": [
+        "argocd"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "agente-pr",
+      "from": "agente",
+      "to": "pr",
+      "label": "token de 1 h",
+      "labelAt": [
+        110,
+        148
+      ]
+    },
+    {
+      "id": "pr-checks",
+      "from": "pr",
+      "to": "checks"
+    },
+    {
+      "id": "checks-merge",
+      "from": "checks",
+      "to": "merge",
+      "label": "en verde",
+      "fromSide": "right",
+      "toSide": "left",
+      "labelAt": [
+        220,
+        300
+      ]
+    },
+    {
+      "id": "merge-promo",
+      "from": "merge",
+      "to": "promo",
+      "label": "nueva versión",
+      "labelAt": [
+        330,
+        330
+      ]
+    },
+    {
+      "id": "promo-despliegue",
+      "from": "promo",
+      "to": "despliegue"
+    },
+    {
+      "id": "despliegue-argocd",
+      "from": "despliegue",
+      "to": "argocd",
+      "label": "pull",
+      "variant": "dashed",
+      "labelAt": [
+        550,
+        568
+      ]
+    }
+  ]
+}

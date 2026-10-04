@@ -55,6 +55,10 @@ Requiere en el repo que lo llama el secreto `CLAUDE_CODE_OAUTH_TOKEN`, generado 
 python3 -m pytest scripts/triage agent-standards/hooks -q   # tests
 ```
 
+## Bitácora
+
+Pasos, decisiones, configuración manual y problemas resueltos de la POC: [docs/poc/README.md](docs/poc/README.md).
+
 ## Repos de la POC
 
 - [poc-almagentic-app](https://github.com/acbacb77/poc-almagentic-app): código y harness del agente

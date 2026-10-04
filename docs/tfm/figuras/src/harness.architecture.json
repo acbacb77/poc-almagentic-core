@@ -1,0 +1,238 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Capas del harness en el camino de una acción",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "external": {
+          "label": "Persona o entrada"
+        },
+        "backend": {
+          "label": "Agente o proceso"
+        },
+        "security": {
+          "label": "Control o aprobación"
+        },
+        "frontend": {
+          "label": "Artefacto en GitHub"
+        },
+        "database": {
+          "label": "Estado en git"
+        },
+        "messagebus": {
+          "label": "Bot de promoción"
+        },
+        "cloud": {
+          "label": "Clúster"
+        }
+      }
+    }
+  },
+  "components": [
+    {
+      "id": "guia",
+      "type": "external",
+      "label": "1-2 · Contexto",
+      "sublabel": "AGENTS.md, constitución",
+      "pos": [
+        40,
+        50
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "agente",
+      "type": "backend",
+      "label": "Agente",
+      "sublabel": "propone una acción",
+      "pos": [
+        260,
+        50
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "permisos",
+      "type": "security",
+      "label": "3 · Permisos",
+      "sublabel": "settings.json",
+      "pos": [
+        260,
+        190
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "hook",
+      "type": "security",
+      "label": "4 · Hook",
+      "sublabel": "guard.py, deja registro",
+      "pos": [
+        260,
+        300
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "sandbox",
+      "type": "security",
+      "label": "5 · Sandbox",
+      "sublabel": "red y secretos",
+      "pos": [
+        260,
+        410
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "bloqueada",
+      "type": "security",
+      "label": "Bloqueada",
+      "sublabel": "no se ejecuta",
+      "pos": [
+        480,
+        245
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "identidad",
+      "type": "security",
+      "label": "6 · Identidad",
+      "sublabel": "GitHub App, token 1 h",
+      "pos": [
+        260,
+        580
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "plataforma",
+      "type": "security",
+      "label": "7 · Plataforma",
+      "sublabel": "PR y aprobación humana",
+      "pos": [
+        480,
+        580
+      ],
+      "size": [
+        140,
+        56
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Capas 1 y 2",
+      "wraps": [
+        "guia",
+        "agente"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Capas 3 a 5",
+      "wraps": [
+        "permisos",
+        "hook",
+        "sandbox"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "Bloqueo",
+      "wraps": [
+        "bloqueada"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Capas 6 y 7",
+      "wraps": [
+        "identidad",
+        "plataforma"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "guia-agente",
+      "from": "guia",
+      "to": "agente",
+      "label": "orienta",
+      "variant": "dashed"
+    },
+    {
+      "id": "agente-permisos",
+      "from": "agente",
+      "to": "permisos"
+    },
+    {
+      "id": "permisos-hook",
+      "from": "permisos",
+      "to": "hook"
+    },
+    {
+      "id": "hook-sandbox",
+      "from": "hook",
+      "to": "sandbox"
+    },
+    {
+      "id": "sandbox-identidad",
+      "from": "sandbox",
+      "to": "identidad",
+      "label": "git push",
+      "labelAt": [
+        330,
+        523
+      ]
+    },
+    {
+      "id": "identidad-plataforma",
+      "from": "identidad",
+      "to": "plataforma",
+      "label": "PR"
+    },
+    {
+      "id": "permisos-bloqueada",
+      "from": "permisos",
+      "to": "bloqueada",
+      "variant": "security",
+      "fromSide": "right",
+      "toSide": "top"
+    },
+    {
+      "id": "hook-bloqueada",
+      "from": "hook",
+      "to": "bloqueada",
+      "variant": "security",
+      "fromSide": "right",
+      "toSide": "bottom"
+    }
+  ]
+}
