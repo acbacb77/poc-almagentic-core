@@ -44,25 +44,27 @@ Registro de todo lo hecho en la POC: decisiones, pasos manuales, PRs y problemas
 
 ## Estado de las tareas
 
-| # | Tarea | Estado |
-|---|---|---|
-| 1 | Definir alcance y stack | ✅ Hecha |
-| 2 | Crear repos y entorno aislado | ✅ Hecha |
-| 3 | Harness: AGENTS.md, permisos y constitución | ✅ Hecha y probada |
-| A | Entrada de demanda con agente de triage | ✅ Hecha y probada |
-| 4 | Spec de la feature con Spec Kit | ⏭️ Siguiente |
-| 5 | Implementación por el agente + tests | Pendiente |
-| 6 | CI: build, tests y lint | Pendiente |
-| 7 | Scan: SAST, SCA, secretos, config del agente, ficheros generados | Pendiente |
-| 8 | Agente revisor en PRs y respuesta a `@claude` | Pendiente |
-| 9 | Supply chain: SBOM, firma y provenance | Pendiente |
-| 10 | Deploy GitOps al cluster local con gate humano | Pendiente |
-| B | Gestión de releases | Pendiente |
-| 11 | Cerrar el loop: alerta → issue → agente → PR; telemetría de agentes | Pendiente |
-| C | Mantenimiento continuo | Pendiente |
-| D | Retirada de un endpoint v1 | Pendiente |
-| E | Informe de trazabilidad por release | Pendiente |
-| 12 | Guion y ensayo de la demo | Pendiente |
+Las tareas con letra son **extensiones ALM**: se añadieron al plan original y se ejecutan entre dos tareas principales.
+
+| # | Tarea | Tipo | Estado |
+|---|---|---|---|
+| **1** | Definir alcance y stack | Principal | ✅ Hecha |
+| **2** | Crear repos y entorno aislado | Principal | ✅ Hecha |
+| **3** | Harness del agente | Principal | ✅ Hecha |
+| ↳ A | Entrada de demanda con agente de triage | Extensión ALM (entre 3 y 4) | ✅ Hecha |
+| **4** | Spec de la feature con Spec Kit | Principal | ⏭️ Siguiente |
+| **5** | Implementación por el agente + tests | Principal | Pendiente |
+| **6** | CI: build, tests y lint | Principal | Pendiente |
+| **7** | Scan de seguridad | Principal | Pendiente |
+| **8** | Agente revisor y respuesta a @claude | Principal | Pendiente |
+| **9** | Supply chain | Principal | Pendiente |
+| **10** | Deploy GitOps con gate humano | Principal | Pendiente |
+| ↳ B | Gestión de releases | Extensión ALM (entre 10 y 11) | Pendiente |
+| **11** | Cerrar el loop de operación | Principal | Pendiente |
+| ↳ C | Mantenimiento continuo | Extensión ALM (entre 11 y 12) | Pendiente |
+| ↳ D | Retirada de un endpoint v1 | Extensión ALM (entre 11 y 12) | Pendiente |
+| ↳ E | Informe de trazabilidad | Extensión ALM (entre 11 y 12) | Pendiente |
+| **12** | Guion y ensayo de la demo | Principal | Pendiente |
 
 ---
 
@@ -195,49 +197,51 @@ Repos, protección de main, identidades de los bots y base de Argo CD.
 
 ---
 
-## Tarea A · Entrada de demanda con agente de triage ✅
-
-Plantilla de petición; Claude sin herramientas propone y un script valida y aplica. Decide un humano con la etiqueta aprobado.
-
-### Prerrequisitos manuales
-
-- ✅ Token de CI generado con claude setup-token y validado
-- ✅ Secreto CLAUDE_CODE_OAUTH_TOKEN en Actions de app (no en Agents)
-
-### Subtareas
-
-| # | Subtarea | Quién | Estado | Enlaces |
-|---|---|---|---|---|
-| A.1 | Workflow de triage en core | Claude 🤖 | ✅ | [core#4](https://github.com/acbacb77/poc-almagentic-core/pull/4) |
-| A.2 | Plantilla de petición y workflow en app | Claude 🤖 | ✅ | [app#4](https://github.com/acbacb77/poc-almagentic-app/pull/4) |
-| A.3 | Crear las 18 etiquetas de triage | Claude 🤖 | ✅ |  |
-| A.4 | Fusionar core#4 y app#4 | Usuario 👤 | ✅ |  |
-| A.5 | Publicar la release v1 en core | Usuario 👤 | ✅ |  |
-| A.6 | Probar con una petición normal y una inyección | Usuario 👤 | ✅ | [#5 Catálogo](https://github.com/acbacb77/poc-almagentic-app/issues/5) · [#6 Inyección](https://github.com/acbacb77/poc-almagentic-app/issues/6) |
-| A.7 | Mostrar en el comentario el motivo cuando el modelo falla | Claude 🤖 | ⬜ |  |
-
-### Detalle
-
-**Cómo generar y guardar el token**
-1. `claude setup-token`, con el terminal amplio para que el token no se parta.
-2. Validarlo: `read -rs TOKEN; CLAUDE_CODE_OAUTH_TOKEN="$TOKEN" claude -p "Responde solo: OK"`.
-3. app → Settings → Secrets and variables → **Actions** → `CLAUDE_CODE_OAUTH_TOKEN`. Después, `unset TOKEN`.
-
-**Cómo publicar la release `v1`**: core → Releases → Draft a new release → Choose a tag `v1` → Create new tag on publish → Target `main` → Publish.
-
-**Cómo funciona el triage**
-1. Alguien abre un issue con la plantilla **Petición** → etiqueta `triage:pendiente`.
-2. ⚙️ `analyze`: Claude lee la petición **sin herramientas ni permiso de escritura** y devuelve JSON.
-3. ⚙️ `apply`: un script valida el JSON contra listas cerradas, comprueba que los issues citados existen, neutraliza menciones y HTML, y pone etiquetas y comentario.
-4. 👤 Un responsable decide: añade `aprobado`, cambia etiquetas o pide más información. `triage:repetir` vuelve a lanzarlo.
-5. Peticiones de personas sin acceso al repo: `triage:manual`, sin pasar por el modelo.
-
-**Pruebas realizadas**
-
-| Issue | Qué probaba | Resultado |
-|---|---|---|
-| [#5 Catálogo de productos](https://github.com/acbacb77/poc-almagentic-app/issues/5) | Petición normal | ✅ `funcionalidad` · `media` · `M`, 4 criterios, 5 preguntas abiertas, riesgos (incluido el versionado de la API) |
-| [#6 Mensajes de error + inyección](https://github.com/acbacb77/poc-almagentic-app/issues/6) | Prompt injection | ✅ `triage:sospechoso`, prioridad baja (no alta), sin `aprobado`, mención neutralizada |
+> ## ↳ Tarea A · Entrada de demanda con agente de triage ✅
+>
+> **Extensión ALM** · se ejecuta entre la tarea 3 y la 4.
+>
+> Plantilla de petición; Claude sin herramientas propone y un script valida y aplica. Decide un humano con la etiqueta aprobado.
+>
+> ### Prerrequisitos manuales
+>
+> - ✅ Token de CI generado con claude setup-token y validado
+> - ✅ Secreto CLAUDE_CODE_OAUTH_TOKEN en Actions de app (no en Agents)
+>
+> ### Subtareas
+>
+> | # | Subtarea | Quién | Estado | Enlaces |
+> |---|---|---|---|---|
+> | A.1 | Workflow de triage en core | Claude 🤖 | ✅ | [core#4](https://github.com/acbacb77/poc-almagentic-core/pull/4) |
+> | A.2 | Plantilla de petición y workflow en app | Claude 🤖 | ✅ | [app#4](https://github.com/acbacb77/poc-almagentic-app/pull/4) |
+> | A.3 | Crear las 18 etiquetas de triage | Claude 🤖 | ✅ |  |
+> | A.4 | Fusionar core#4 y app#4 | Usuario 👤 | ✅ |  |
+> | A.5 | Publicar la release v1 en core | Usuario 👤 | ✅ |  |
+> | A.6 | Probar con una petición normal y una inyección | Usuario 👤 | ✅ | [#5 Catálogo](https://github.com/acbacb77/poc-almagentic-app/issues/5) · [#6 Inyección](https://github.com/acbacb77/poc-almagentic-app/issues/6) |
+> | A.7 | Mostrar en el comentario el motivo cuando el modelo falla | Claude 🤖 | ⬜ |  |
+>
+> ### Detalle
+>
+> **Cómo generar y guardar el token**
+> 1. `claude setup-token`, con el terminal amplio para que el token no se parta.
+> 2. Validarlo: `read -rs TOKEN; CLAUDE_CODE_OAUTH_TOKEN="$TOKEN" claude -p "Responde solo: OK"`.
+> 3. app → Settings → Secrets and variables → **Actions** → `CLAUDE_CODE_OAUTH_TOKEN`. Después, `unset TOKEN`.
+>
+> **Cómo publicar la release `v1`**: core → Releases → Draft a new release → Choose a tag `v1` → Create new tag on publish → Target `main` → Publish.
+>
+> **Cómo funciona el triage**
+> 1. Alguien abre un issue con la plantilla **Petición** → etiqueta `triage:pendiente`.
+> 2. ⚙️ `analyze`: Claude lee la petición **sin herramientas ni permiso de escritura** y devuelve JSON.
+> 3. ⚙️ `apply`: un script valida el JSON contra listas cerradas, comprueba que los issues citados existen, neutraliza menciones y HTML, y pone etiquetas y comentario.
+> 4. 👤 Un responsable decide: añade `aprobado`, cambia etiquetas o pide más información. `triage:repetir` vuelve a lanzarlo.
+> 5. Peticiones de personas sin acceso al repo: `triage:manual`, sin pasar por el modelo.
+>
+> **Pruebas realizadas**
+>
+> | Issue | Qué probaba | Resultado |
+> |---|---|---|
+> | [#5 Catálogo de productos](https://github.com/acbacb77/poc-almagentic-app/issues/5) | Petición normal | ✅ `funcionalidad` · `media` · `M`, 4 criterios, 5 preguntas abiertas, riesgos (incluido el versionado de la API) |
+> | [#6 Mensajes de error + inyección](https://github.com/acbacb77/poc-almagentic-app/issues/6) | Prompt injection | ✅ `triage:sospechoso`, prioridad baja (no alta), sin `aprobado`, mención neutralizada |
 
 ---
 
@@ -393,23 +397,25 @@ _Subtareas previstas: se ajustarán al llegar a la tarea._
 
 ---
 
-## Tarea B · Gestión de releases ⬜
-
-Versionado semántico, changelog y notas; automatizar las etiquetas de core.
-
-### Prerrequisitos manuales
-
-- Ninguno nuevo.
-
-### Subtareas
-
-| # | Subtarea | Quién | Estado | Enlaces |
-|---|---|---|---|---|
-| B.1 | Versionado y notas de versión con release-please | Claude 🤖 | ⬜ |  |
-| B.2 | Automatizar las etiquetas de core (vX.Y.Z y mover v1) | Claude 🤖 | ⬜ |  |
-| B.3 | Hasta entonces, crear o mover etiquetas de core a mano | Usuario 👤 | ⬜ |  |
-
-_Subtareas previstas: se ajustarán al llegar a la tarea._
+> ## ↳ Tarea B · Gestión de releases ⬜
+>
+> **Extensión ALM** · se ejecuta entre la tarea 10 y la 11.
+>
+> Versionado semántico, changelog y notas; automatizar las etiquetas de core.
+>
+> ### Prerrequisitos manuales
+>
+> - Ninguno nuevo.
+>
+> ### Subtareas
+>
+> | # | Subtarea | Quién | Estado | Enlaces |
+> |---|---|---|---|---|
+> | B.1 | Versionado y notas de versión con release-please | Claude 🤖 | ⬜ |  |
+> | B.2 | Automatizar las etiquetas de core (vX.Y.Z y mover v1) | Claude 🤖 | ⬜ |  |
+> | B.3 | Hasta entonces, crear o mover etiquetas de core a mano | Usuario 👤 | ⬜ |  |
+>
+> _Subtareas previstas: se ajustarán al llegar a la tarea._
 
 ---
 
@@ -434,63 +440,69 @@ _Subtareas previstas: se ajustarán al llegar a la tarea._
 
 ---
 
-## Tarea C · Mantenimiento continuo ⬜
-
-Actualización de dependencias y evals del harness al cambiar de modelo.
-
-### Prerrequisitos manuales
-
-- Ninguno nuevo.
-
-### Subtareas
-
-| # | Subtarea | Quién | Estado | Enlaces |
-|---|---|---|---|---|
-| C.1 | Dependabot en app | Claude 🤖 | ⬜ |  |
-| C.2 | Evals del harness al cambiar de modelo | Claude 🤖 | ⬜ |  |
-
-_Subtareas previstas: se ajustarán al llegar a la tarea._
-
----
-
-## Tarea D · Retirada de un endpoint v1 ⬜
-
-v2 del catálogo con importe y moneda; deprecación, migración y retirada de v1.
-
-### Prerrequisitos manuales
-
-- Ninguno nuevo.
-
-### Subtareas
-
-| # | Subtarea | Quién | Estado | Enlaces |
-|---|---|---|---|---|
-| D.1 | Abrir la petición de la v2 | Usuario 👤 | ⬜ |  |
-| D.2 | Implementar /api/v2 con importe y moneda | Agente (bot) | ⬜ |  |
-| D.3 | Marcar v1 como deprecada (cabeceras Deprecation y Sunset) | Agente (bot) | ⬜ |  |
-| D.4 | Retirar v1 | Agente (bot) | ⬜ |  |
-| D.5 | Aprobar cada PR | Usuario 👤 | ⬜ |  |
-
-_Subtareas previstas: se ajustarán al llegar a la tarea._
+> ## ↳ Tarea C · Mantenimiento continuo ⬜
+>
+> **Extensión ALM** · se ejecuta entre la tarea 11 y la 12.
+>
+> Actualización de dependencias y evals del harness al cambiar de modelo.
+>
+> ### Prerrequisitos manuales
+>
+> - Ninguno nuevo.
+>
+> ### Subtareas
+>
+> | # | Subtarea | Quién | Estado | Enlaces |
+> |---|---|---|---|---|
+> | C.1 | Dependabot en app | Claude 🤖 | ⬜ |  |
+> | C.2 | Evals del harness al cambiar de modelo | Claude 🤖 | ⬜ |  |
+>
+> _Subtareas previstas: se ajustarán al llegar a la tarea._
 
 ---
 
-## Tarea E · Informe de trazabilidad ⬜
+> ## ↳ Tarea D · Retirada de un endpoint v1 ⬜
+>
+> **Extensión ALM** · se ejecuta entre la tarea 11 y la 12.
+>
+> v2 del catálogo con importe y moneda; deprecación, migración y retirada de v1.
+>
+> ### Prerrequisitos manuales
+>
+> - Ninguno nuevo.
+>
+> ### Subtareas
+>
+> | # | Subtarea | Quién | Estado | Enlaces |
+> |---|---|---|---|---|
+> | D.1 | Abrir la petición de la v2 | Usuario 👤 | ⬜ |  |
+> | D.2 | Implementar /api/v2 con importe y moneda | Agente (bot) | ⬜ |  |
+> | D.3 | Marcar v1 como deprecada (cabeceras Deprecation y Sunset) | Agente (bot) | ⬜ |  |
+> | D.4 | Retirar v1 | Agente (bot) | ⬜ |  |
+> | D.5 | Aprobar cada PR | Usuario 👤 | ⬜ |  |
+>
+> _Subtareas previstas: se ajustarán al llegar a la tarea._
 
-Cada release enlaza petición, spec, PR, escaneos, aprobaciones y despliegue.
+---
 
-### Prerrequisitos manuales
-
-- Ninguno nuevo.
-
-### Subtareas
-
-| # | Subtarea | Quién | Estado | Enlaces |
-|---|---|---|---|---|
-| E.1 | Generador del informe por release | Claude 🤖 | ⬜ |  |
-| E.2 | Revisar el informe | Usuario 👤 | ⬜ |  |
-
-_Subtareas previstas: se ajustarán al llegar a la tarea._
+> ## ↳ Tarea E · Informe de trazabilidad ⬜
+>
+> **Extensión ALM** · se ejecuta entre la tarea 11 y la 12.
+>
+> Cada release enlaza petición, spec, PR, escaneos, aprobaciones y despliegue.
+>
+> ### Prerrequisitos manuales
+>
+> - Ninguno nuevo.
+>
+> ### Subtareas
+>
+> | # | Subtarea | Quién | Estado | Enlaces |
+> |---|---|---|---|---|
+> | E.1 | Generador del informe por release | Claude 🤖 | ⬜ |  |
+> | E.2 | Revisar el informe | Usuario 👤 | ⬜ |  |
+>
+> _Subtareas previstas: se ajustarán al llegar a la tarea._
 
 ---
 

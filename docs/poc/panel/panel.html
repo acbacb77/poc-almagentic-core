@@ -35,7 +35,7 @@ header{display:grid;gap:18px;margin-bottom:22px}
 h1{font-size:clamp(26px,4vw,34px);line-height:1.15;margin:4px 0 0;text-wrap:balance;letter-spacing:-.01em}
 .sub{color:var(--muted);margin:6px 0 0;max-width:68ch}
 .progress{display:grid;gap:8px}
-.bar{display:flex;gap:3px;height:12px}
+.bar{display:flex;gap:3px;height:14px;align-items:stretch}
 .bar span{flex:1;border-radius:2px;background:var(--todo-bg)}
 .bar span.done{background:var(--done)}
 .bar span.next{background:var(--next)}
@@ -113,6 +113,25 @@ ol.subtasks .state{color:var(--done);font-weight:700;text-align:center}
 .none{font-size:14px;color:var(--muted);margin:0}
 .owner.agent{background:var(--agent-bg);color:var(--agent)}
 @media (max-width:560px){ol.subtasks li{grid-template-columns:36px minmax(0,1fr) 18px}ol.subtasks .owner{grid-column:2;justify-self:start}}
+/* Raíl: tareas principales en la línea; extensiones ALM como ramas sangradas */
+.tasks{position:relative;padding-left:26px}
+.tasks::before{content:"";position:absolute;left:9px;top:8px;bottom:8px;width:2px;background:var(--line);border-radius:2px}
+details.task{position:relative}
+details.task.main::before{content:"";position:absolute;left:-23px;top:20px;width:12px;height:12px;border-radius:50%;background:var(--surface);border:2px solid var(--line)}
+details.task.main.done::before{background:var(--done);border-color:var(--done)}
+details.task.main.next::before{background:var(--next);border-color:var(--next)}
+details.task.alm{margin-left:34px;border-style:dashed;background:color-mix(in srgb,var(--surface) 70%,var(--bg))}
+details.task.alm::before{content:"";position:absolute;left:-58px;top:25px;width:52px;height:2px;background:var(--line)}
+details.task.alm::after{content:"";position:absolute;left:-10px;top:21px;width:8px;height:8px;border-top:2px solid var(--line);border-right:2px solid var(--line);transform:rotate(45deg)}
+details.task.alm .tid{border:1.5px dashed currentColor;background:transparent;border-radius:50%}
+.almtag{display:inline-flex;align-items:center;gap:6px;margin-left:8px;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);border-radius:4px;padding:0 6px;vertical-align:1px}
+.tphase .between{color:var(--muted)}
+.bar span.alm{height:60%;align-self:end;opacity:.85}
+.kinds{display:grid;gap:8px;font-size:13.5px}
+.kinds div{display:grid;grid-template-columns:30px minmax(0,1fr);gap:8px;align-items:center}
+.kinds .k-main{width:12px;height:12px;border-radius:50%;background:var(--accent);justify-self:center}
+.kinds .k-alm{width:22px;height:14px;border:1.5px dashed var(--muted);border-radius:4px;justify-self:center}
+@media (max-width:560px){.tasks{padding-left:20px}.tasks::before{left:6px}details.task.main::before{left:-19px}details.task.alm{margin-left:18px}details.task.alm::before{left:-34px;width:30px}}
 footer{margin-top:28px;font-size:13px;color:var(--muted)}
 @media (prefers-reduced-motion:no-preference){details.task>summary{transition:background .15s}details.task>summary:hover{background:var(--sunk);border-radius:10px}}
 </style>
@@ -151,6 +170,13 @@ footer{margin-top:28px;font-size:13px;color:var(--muted)}
     </main>
 
     <aside>
+      <section class="panel">
+        <h3>Tipos de tarea</h3>
+        <div class="kinds">
+          <div><span class="k-main"></span><span><b>Principal</b> (1, 2, 3…): el plan original, en la línea.</span></div>
+          <div><span class="k-alm"></span><span><b>Extensión ALM</b> (A, B, C…): añadida para cubrir el ciclo completo; se ejecuta entre dos principales.</span></div>
+        </div>
+      </section>
       <section class="panel">
         <h3>Quién hace cada subtarea</h3>
         <div class="legend">
@@ -194,6 +220,7 @@ const TASKS = [
   "phase": "Gobierno",
   "status": "done",
   "desc": "GitHub + Actions con 3 repos públicos, Claude Code, FastAPI y Kubernetes local con Argo CD.",
+  "alm": null,
   "prereqs": [],
   "subs": [
    [
@@ -234,6 +261,7 @@ const TASKS = [
   "phase": "Gobierno",
   "status": "done",
   "desc": "Repos, protección de main, identidades de los bots y base de Argo CD.",
+  "alm": null,
   "prereqs": [
    [
     "Cuenta de GitHub",
@@ -301,6 +329,7 @@ const TASKS = [
   "phase": "Construcción",
   "status": "done",
   "desc": "7 capas de control: contexto, constitución, permisos, hook, sandbox, identidad y plataforma.",
+  "alm": null,
   "prereqs": [
    [
     "VS Code con la extensión Dev Containers",
@@ -406,6 +435,10 @@ const TASKS = [
   "phase": "Demanda",
   "status": "done",
   "desc": "Plantilla de petición; Claude sin herramientas propone y un script valida y aplica. Decide un humano con la etiqueta aprobado.",
+  "alm": [
+   "3",
+   "4"
+  ],
   "prereqs": [
    [
     "Token de CI generado con claude setup-token y validado",
@@ -486,6 +519,7 @@ const TASKS = [
   "phase": "Demanda",
   "status": "next",
   "desc": "El agente escribe spec, plan y tareas del catálogo de productos a partir del issue aprobado.",
+  "alm": null,
   "prereqs": [],
   "subs": [
    [
@@ -531,6 +565,7 @@ const TASKS = [
   "phase": "Construcción",
   "status": "todo",
   "desc": "El agente implementa las tareas de la spec en el devcontainer y abre un PR firmado por el bot.",
+  "alm": null,
   "prereqs": [],
   "subs": [
    [
@@ -565,6 +600,7 @@ const TASKS = [
   "phase": "Calidad",
   "status": "todo",
   "desc": "Workflow reutilizable en core que valida cada PR en una máquina limpia.",
+  "alm": null,
   "prereqs": [],
   "subs": [
    [
@@ -599,6 +635,7 @@ const TASKS = [
   "phase": "Calidad",
   "status": "todo",
   "desc": "SAST, dependencias, secretos, configuración del agente y ficheros generados en PRs.",
+  "alm": null,
   "prereqs": [],
   "subs": [
    [
@@ -627,6 +664,7 @@ const TASKS = [
   "phase": "Calidad",
   "status": "todo",
   "desc": "Revisión automática contra la spec y cambios a petición, solo para usuarios con escritura.",
+  "alm": null,
   "prereqs": [
    [
     "Clave de almagentic-agent como secreto de Actions en app",
@@ -660,6 +698,7 @@ const TASKS = [
   "phase": "Entrega",
   "status": "todo",
   "desc": "SBOM, firma de la imagen y provenance.",
+  "alm": null,
   "prereqs": [],
   "subs": [
    [
@@ -682,6 +721,7 @@ const TASKS = [
   "phase": "Entrega",
   "status": "todo",
   "desc": "El bot promotor abre un PR en gitops; tu merge despliega con Argo CD en el cluster local.",
+  "alm": null,
   "prereqs": [
    [
     "Kubernetes activado en Docker Desktop con 8 GB",
@@ -729,6 +769,10 @@ const TASKS = [
   "phase": "Entrega",
   "status": "todo",
   "desc": "Versionado semántico, changelog y notas; automatizar las etiquetas de core.",
+  "alm": [
+   "10",
+   "11"
+  ],
   "prereqs": [],
   "subs": [
    [
@@ -757,6 +801,7 @@ const TASKS = [
   "phase": "Operación",
   "status": "todo",
   "desc": "Alerta → issue → agente → PR, y panel de telemetría de los agentes.",
+  "alm": null,
   "prereqs": [
    [
     "Token del puente alerta → issue como secreto del cluster",
@@ -796,6 +841,10 @@ const TASKS = [
   "phase": "Operación",
   "status": "todo",
   "desc": "Actualización de dependencias y evals del harness al cambiar de modelo.",
+  "alm": [
+   "11",
+   "12"
+  ],
   "prereqs": [],
   "subs": [
    [
@@ -818,6 +867,10 @@ const TASKS = [
   "phase": "Retirada",
   "status": "todo",
   "desc": "v2 del catálogo con importe y moneda; deprecación, migración y retirada de v1.",
+  "alm": [
+   "11",
+   "12"
+  ],
   "prereqs": [],
   "subs": [
    [
@@ -858,6 +911,10 @@ const TASKS = [
   "phase": "Gobierno",
   "status": "todo",
   "desc": "Cada release enlaza petición, spec, PR, escaneos, aprobaciones y despliegue.",
+  "alm": [
+   "11",
+   "12"
+  ],
   "prereqs": [],
   "subs": [
    [
@@ -880,6 +937,7 @@ const TASKS = [
   "phase": "Gobierno",
   "status": "todo",
   "desc": "Narrativa, métricas y plan B grabado.",
+  "alm": null,
   "prereqs": [],
   "subs": [
    [
@@ -916,10 +974,10 @@ function card(t) {
       <span class="state" aria-label="${ok ? "hecha" : "pendiente"}">${ok ? "✓" : ""}</span>
     </li>`).join("")}</ol>`;
   return `
-  <details class="task ${t.status}" ${t.status === "next" ? "open" : ""}>
+  <details class="task ${t.alm ? "alm" : "main"} ${t.status}" ${t.status === "next" ? "open" : ""}>
     <summary>
       <span class="tid">${esc(t.id)}</span>
-      <span class="ttitle">${esc(t.title)}<span class="tphase">${esc(t.phase)}</span></span>
+      <span class="ttitle">${esc(t.title)}${t.alm ? '<span class="almtag">Extensión ALM</span>' : ""}<span class="tphase">${esc(t.phase)}${t.alm ? ` <span class="between">· entre la tarea ${esc(t.alm[0])} y la ${esc(t.alm[1])}</span>` : ""}</span></span>
       <span class="pill ${t.status}">${STATUS[t.status]}</span>
     </summary>
     <div class="tbody">
@@ -938,7 +996,7 @@ function render(filter) {
 
 function header() {
   const done = TASKS.filter(t => t.status === "done").length;
-  document.getElementById("bar").innerHTML = TASKS.map(t => `<span class="${t.status}" title="${esc(t.id + " · " + t.title)}"></span>`).join("");
+  document.getElementById("bar").innerHTML = TASKS.map(t => `<span class="${t.status} ${t.alm ? "alm" : ""}" title="${esc(t.id + " · " + t.title)}"></span>`).join("");
   const pending = TASKS.reduce((n, t) => n + t.prereqs.filter(p => !p[1]).length + t.subs.filter(s => s[1] === "usuario" && !s[2]).length, 0);
   document.getElementById("legend").innerHTML =
     `<span><b>${done} de ${TASKS.length}</b> tareas hechas</span><span><b>${Math.round(done / TASKS.length * 100)} %</b> del plan</span><span><b>${pending}</b> pasos tuyos pendientes en todo el plan</span>`;

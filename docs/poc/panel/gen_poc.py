@@ -235,38 +235,69 @@ DETAILS = {
 }
 
 
+def placement(t):
+    """Para una extensión ALM (id con letra), devuelve las tareas principales entre las que va."""
+    if t["id"].isdigit():
+        return None
+    i = TASKS.index(t)
+    prev = next((x["id"] for x in reversed(TASKS[:i]) if x["id"].isdigit()), None)
+    nxt = next((x["id"] for x in TASKS[i + 1:] if x["id"].isdigit()), None)
+    return prev, nxt
+
+
 def links_md(links):
     return " · ".join(f"[{l['label']}]({l['href']})" for l in links)
 
 
-def markdown():
+def task_md(t):
     out = []
+    pl = placement(t)
+    title = f"## {'↳ ' if pl else ''}Tarea {t['id']} · {t['title']} {STATUS_MD[t['status']]}"
+    out.append(title + "\n")
+    if pl:
+        out.append(f"**Extensión ALM** · se ejecuta entre la tarea {pl[0]} y la {pl[1]}.\n")
+    out.append(f"{t['desc']}\n")
+    out.append("### Prerrequisitos manuales\n")
+    if t["prereqs"]:
+        out += [f"- {'✅' if ok else '⬜'} {txt}" for txt, ok in t["prereqs"]]
+    else:
+        out.append("- Ninguno nuevo.")
+    out.append("")
+    out.append("### Subtareas\n")
+    out.append("| # | Subtarea | Quién | Estado | Enlaces |")
+    out.append("|---|---|---|---|---|")
+    for i, (txt, who, ok, links) in enumerate(t["subs"], 1):
+        out.append(f"| {t['id']}.{i} | {txt} | {OWNERS[who]} | {'✅' if ok else '⬜'} | {links_md(links)} |")
+    out.append("")
+    if t["id"] in DETAILS:
+        out.append("### Detalle\n")
+        out.append(DETAILS[t["id"]].rstrip() + "\n")
+    if t["status"] == "todo":
+        out.append("_Subtareas previstas: se ajustarán al llegar a la tarea._\n")
+    text = "\n".join(out)
+    if pl:  # las extensiones ALM van sangradas como cita
+        text = "\n".join(("> " + line) if line else ">" for line in text.rstrip().split("\n")) + "\n"
+    return text
+
+
+def markdown():
+    return "\n".join(task_md(t) + "\n---\n" for t in TASKS)
+
+
+def status_table():
+    rows = ["| # | Tarea | Tipo | Estado |", "|---|---|---|---|"]
+    names = {"done": "✅ Hecha", "next": "⏭️ Siguiente", "todo": "Pendiente"}
     for t in TASKS:
-        out.append(f"## Tarea {t['id']} · {t['title']} {STATUS_MD[t['status']]}\n")
-        out.append(f"{t['desc']}\n")
-        out.append("### Prerrequisitos manuales\n")
-        if t["prereqs"]:
-            out += [f"- {'✅' if ok else '⬜'} {txt}" for txt, ok in t["prereqs"]]
-        else:
-            out.append("- Ninguno nuevo.")
-        out.append("")
-        out.append("### Subtareas\n")
-        out.append("| # | Subtarea | Quién | Estado | Enlaces |")
-        out.append("|---|---|---|---|---|")
-        for i, (txt, who, ok, links) in enumerate(t["subs"], 1):
-            out.append(f"| {t['id']}.{i} | {txt} | {OWNERS[who]} | {'✅' if ok else '⬜'} | {links_md(links)} |")
-        out.append("")
-        if t["id"] in DETAILS:
-            out.append("### Detalle\n")
-            out.append(DETAILS[t["id"]])
-        if t["status"] == "todo":
-            out.append("_Subtareas previstas: se ajustarán al llegar a la tarea._\n")
-        out.append("---\n")
-    return "\n".join(out)
+        pl = placement(t)
+        kind = f"Extensión ALM (entre {pl[0]} y {pl[1]})" if pl else "Principal"
+        tid = f"↳ {t['id']}" if pl else f"**{t['id']}**"
+        rows.append(f"| {tid} | {t['title']} | {kind} | {names[t['status']]} |")
+    return "\n".join(rows) + "\n"
 
 
 def js_data():
     data = [dict(id=t["id"], title=t["title"], phase=t["phase"], status=t["status"], desc=t["desc"],
+                 alm=placement(t),
                  prereqs=[[a, b] for a, b in t["prereqs"]],
                  subs=[[a, b, c, d] for a, b, c, d in t["subs"]]) for t in TASKS]
     return json.dumps(data, ensure_ascii=False, indent=1)
@@ -276,7 +307,11 @@ if __name__ == "__main__":
     readme, html = Path(sys.argv[1]), Path(sys.argv[2])
     s = readme.read_text(encoding="utf-8")
     a, b = s.index("## Tarea 1 · "), s.index("## Problemas encontrados y soluciones")
-    readme.write_text(s[:a] + markdown() + "\n" + s[b:], encoding="utf-8")
+    s = s[:a] + markdown() + "\n" + s[b:]
+    a = s.index("## Estado de las tareas\n") + len("## Estado de las tareas\n")
+    b = s.index("\n---\n", a)
+    s = s[:a] + "\nLas tareas con letra son **extensiones ALM**: se añadieron al plan original y se ejecutan entre dos tareas principales.\n\n" + status_table() + s[b:]
+    readme.write_text(s, encoding="utf-8")
     h = html.read_text(encoding="utf-8")
     h = re.sub(r"const TASKS = .*?;\n// END TASKS", lambda m: "const TASKS = " + js_data() + ";\n// END TASKS", h, flags=re.S)
     html.write_text(h, encoding="utf-8")
