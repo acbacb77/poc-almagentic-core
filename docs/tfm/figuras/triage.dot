@@ -1,0 +1,17 @@
+digraph triage {
+  graph [rankdir=LR, fontname="Helvetica", fontsize=11, nodesep=0.3, ranksep=0.45, bgcolor="white", pad=0.2];
+  node  [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=10, color="#5b6964", fillcolor="#ffffff", penwidth=1.2];
+  edge  [fontname="Helvetica", fontsize=9, color="#5b6964"];
+
+  issue   [label="Issue con plantilla\n«Petición»\n(texto no confiable)", fillcolor="#fdf0d9"];
+  build   [label="build_prompt.py\nrecorta y envuelve\nen <peticion>"];
+  claude  [label="analyze · Claude\nsin herramientas\npermiso: leer issues", fillcolor="#dff0ec"];
+  json    [label="JSON\n(esquema cerrado)", shape=note];
+  apply   [label="apply · script\nvalida, neutraliza\npermiso: escribir issues", fillcolor="#e3ebf6"];
+  out     [label="Etiquetas +\ncomentario de\npropuesta"];
+  human   [label="Responsable:\n«aprobado»", shape=ellipse, fillcolor="#fbe9dc"];
+  manual  [label="triage:manual", fillcolor="#f9d0c4"];
+
+  issue -> build -> claude -> json -> apply -> out -> human;
+  apply -> manual [label="JSON inválido\no error", style=dashed];
+}

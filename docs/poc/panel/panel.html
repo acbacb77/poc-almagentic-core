@@ -191,6 +191,7 @@ footer{margin-top:28px;font-size:13px;color:var(--muted)}
         <h3>Documentación</h3>
         <div class="kv">
           <div><a href="https://github.com/acbacb77/poc-almagentic-core/blob/docs/bitacora/docs/poc/README.md">Bitácora completa</a><small>Pasos, PRs, pruebas y problemas resueltos</small></div>
+          <div><a href="https://github.com/acbacb77/poc-almagentic-core/tree/docs/bitacora/docs/tfm">Memoria del TFM</a><small>Documento Word vivo · se actualiza al cerrar cada tarea</small></div>
         </div>
       </section>
     </aside>
@@ -923,7 +924,7 @@ const TASKS = [
   "title": "Guion y ensayo de la demo",
   "phase": "Gobierno",
   "status": "todo",
-  "desc": "Narrativa, métricas y plan B grabado.",
+  "desc": "Narrativa, métricas, plan B grabado y cierre de la memoria del TFM (requisito para finalizar la POC).",
   "alm": null,
   "prereqs": [],
   "subs": [
@@ -935,6 +936,18 @@ const TASKS = [
    ],
    [
     "Ensayo y grabación del plan B",
+    "usuario",
+    false,
+    []
+   ],
+   [
+    "Completar la memoria del TFM con todas las tareas",
+    "claude",
+    false,
+    []
+   ],
+   [
+    "Revisión final de la memoria (15-45 páginas) y datos de portada",
     "usuario",
     false,
     []

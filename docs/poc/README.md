@@ -1,6 +1,6 @@
 # Bitácora de la POC de ALM agéntico
 
-Registro de todo lo hecho en la POC: decisiones, pasos manuales, PRs y problemas resueltos. Se actualiza al cerrar cada tarea.
+Registro de todo lo hecho en la POC: decisiones, pasos manuales, PRs y problemas resueltos. Se actualiza al cerrar cada tarea, junto con la [memoria del TFM](../tfm/README.md), que es requisito para cerrar la POC.
 
 **Última actualización:** 4 de octubre de 2026 · **Avance:** 4 de 17 tareas (1, 2, 3 y A)
 
@@ -508,7 +508,7 @@ _Subtareas previstas: se ajustarán al llegar a la tarea._
 
 ## Tarea 12 · Guion y ensayo de la demo ⬜
 
-Narrativa, métricas y plan B grabado.
+Narrativa, métricas, plan B grabado y cierre de la memoria del TFM (requisito para finalizar la POC).
 
 ### Prerrequisitos manuales
 
@@ -520,6 +520,8 @@ Narrativa, métricas y plan B grabado.
 |---|---|---|---|---|
 | 12.1 | Guion de la demo | Claude 🤖 | ⬜ |  |
 | 12.2 | Ensayo y grabación del plan B | Usuario 👤 | ⬜ |  |
+| 12.3 | Completar la memoria del TFM con todas las tareas | Claude 🤖 | ⬜ |  |
+| 12.4 | Revisión final de la memoria (15-45 páginas) y datos de portada | Usuario 👤 | ⬜ |  |
 
 _Subtareas previstas: se ajustarán al llegar a la tarea._
 

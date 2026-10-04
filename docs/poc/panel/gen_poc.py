@@ -146,10 +146,12 @@ TASKS = [
          subs=[("Generador del informe por release", "claude", False, []),
                ("Revisar el informe", "usuario", False, [])]),
     dict(id="12", title="Guion y ensayo de la demo", phase="Gobierno", status="todo",
-         desc="Narrativa, métricas y plan B grabado.",
+         desc="Narrativa, métricas, plan B grabado y cierre de la memoria del TFM (requisito para finalizar la POC).",
          prereqs=[],
          subs=[("Guion de la demo", "claude", False, []),
-               ("Ensayo y grabación del plan B", "usuario", False, [])]),
+               ("Ensayo y grabación del plan B", "usuario", False, []),
+               ("Completar la memoria del TFM con todas las tareas", "claude", False, []),
+               ("Revisión final de la memoria (15-45 páginas) y datos de portada", "usuario", False, [])]),
 ]
 
 # Detalle extra de la bitácora, que se añade tras las subtareas
