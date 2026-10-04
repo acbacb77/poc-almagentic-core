@@ -1,0 +1,124 @@
+# Triage de peticiones con un agente (tarea A).
+#
+# Dos jobs con permisos separados:
+#   analyze → el modelo lee la petición y devuelve JSON. Sin herramientas,
+#             sin token de escritura y sin ver el token de GitHub.
+#   apply   → un script determinista valida ese JSON y es el único que
+#             etiqueta y comenta.
+# Así, aunque una petición contenga una prompt injection, lo peor que puede
+# conseguir es una propuesta mal clasificada que un humano revisa.
+name: reusable-triage
+
+on:
+  workflow_call:
+    inputs:
+      issue-number:
+        description: Número del issue a clasificar
+        type: number
+        required: true
+      core-ref:
+        description: Versión de poc-almagentic-core con el prompt y los scripts
+        type: string
+        default: v1
+      model:
+        description: Modelo de Claude para el triage
+        type: string
+        default: sonnet
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        description: Token de `claude setup-token` (suscripción Claude)
+        required: true
+
+permissions: {}
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: read
+    steps:
+      - name: Obtener prompt y scripts de core
+        uses: actions/checkout@v4
+        with:
+          repository: acbacb77/poc-almagentic-core
+          ref: ${{ inputs.core-ref }}
+          path: core
+          persist-credentials: false
+
+      - name: Recoger la petición y los issues abiertos
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ISSUE: ${{ inputs.issue-number }}
+        run: |
+          gh issue view "$ISSUE" --repo "$REPO" --json number,title,body > issue.json
+          gh issue list --repo "$REPO" --state open --limit 100 --json number,title > open.json
+          python3 core/scripts/triage/build_prompt.py core/prompts/triage.md issue.json open.json > prompt.md
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Instalar Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Analizar la petición (modelo sin herramientas)
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          MODEL: ${{ inputs.model }}
+        run: |
+          set +e
+          claude -p "$(cat prompt.md)" \
+            --model "$MODEL" \
+            --tools "" \
+            --disallowedTools "mcp__*" \
+            --max-turns 3 \
+            --no-session-persistence \
+            --output-format json \
+            --json-schema "$(cat core/scripts/triage/schema.json)" \
+            > claude-output.json
+          echo "claude terminó con código $?"
+          jq '{subtype, is_error, num_turns, total_cost_usd}' claude-output.json || true
+
+      - name: Guardar la respuesta
+        uses: actions/upload-artifact@v4
+        with:
+          name: triage-${{ inputs.issue-number }}
+          path: |
+            claude-output.json
+            open.json
+          retention-days: 30
+
+  apply:
+    needs: analyze
+    if: always() && needs.analyze.result != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Obtener scripts de core
+        uses: actions/checkout@v4
+        with:
+          repository: acbacb77/poc-almagentic-core
+          ref: ${{ inputs.core-ref }}
+          path: core
+          persist-credentials: false
+
+      - name: Descargar la respuesta
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: triage-${{ inputs.issue-number }}
+
+      - name: Validar y aplicar
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ISSUE: ${{ inputs.issue-number }}
+        run: |
+          [ -f open.json ] || gh issue list --repo "$REPO" --state open --limit 100 --json number,title > open.json
+          python3 core/scripts/triage/apply.py claude-output.json "$ISSUE" open.json
