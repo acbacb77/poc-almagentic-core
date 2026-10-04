@@ -1,0 +1,954 @@
+<title>POC ALM agéntico</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: cabecera con avance + "tu siguiente paso", lista de tareas en orden de ejecución, columna lateral de referencia */
+:root{
+  --bg:#f3f5f4; --surface:#ffffff; --sunk:#e9edeb; --line:#d5dcd9;
+  --fg:#17211e; --muted:#5b6964; --accent:#0d6b5b; --accent-ink:#ffffff;
+  --done:#1f8a4c; --done-bg:#e3f3e9; --next:#b26a00; --next-bg:#fdf0d9; --todo:#7b8783; --todo-bg:#eceff0;
+  --you:#6b3fa0; --you-bg:#f0e8fa; --agent:#9a4a12; --agent-bg:#fbe9dc; --bot:#0d6b5b; --bot-bg:#dff0ec; --auto:#3b5b8c; --auto-bg:#e3ebf6;
+  --sans:"Instrument Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101614; --surface:#18201d; --sunk:#141b19; --line:#2c3733;
+  --fg:#e4ebe8; --muted:#97a6a0; --accent:#4cc2a8; --accent-ink:#06231d;
+  --done:#5bd08d; --done-bg:#163222; --next:#f0b14a; --next-bg:#3a2a0e; --todo:#8d9a96; --todo-bg:#222b28;
+  --you:#c49cf2; --you-bg:#2b2040; --agent:#f0a46e; --agent-bg:#3a2416; --bot:#4cc2a8; --bot-bg:#16302a; --auto:#8fb2e8; --auto-bg:#1b2638;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#101614; --surface:#18201d; --sunk:#141b19; --line:#2c3733;
+  --fg:#e4ebe8; --muted:#97a6a0; --accent:#4cc2a8; --accent-ink:#06231d;
+  --done:#5bd08d; --done-bg:#163222; --next:#f0b14a; --next-bg:#3a2a0e; --todo:#8d9a96; --todo-bg:#222b28;
+  --you:#c49cf2; --you-bg:#2b2040; --agent:#f0a46e; --agent-bg:#3a2416; --bot:#4cc2a8; --bot-bg:#16302a; --auto:#8fb2e8; --auto-bg:#1b2638;
+  color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:15px;line-height:1.5;margin:0}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:20px;padding-block:28px 56px}
+a{color:var(--accent)}
+a:focus-visible,summary:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.mono{font-family:var(--mono);font-size:.86em}
+header{display:grid;gap:18px;margin-bottom:22px}
+.eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+h1{font-size:clamp(26px,4vw,34px);line-height:1.15;margin:4px 0 0;text-wrap:balance;letter-spacing:-.01em}
+.sub{color:var(--muted);margin:6px 0 0;max-width:68ch}
+.progress{display:grid;gap:8px}
+.bar{display:flex;gap:3px;height:12px}
+.bar span{flex:1;border-radius:2px;background:var(--todo-bg)}
+.bar span.done{background:var(--done)}
+.bar span.next{background:var(--next)}
+.progress-legend{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.progress-legend b{color:var(--fg)}
+.next-step{border:1px solid var(--next);background:var(--next-bg);border-radius:10px;padding:16px 18px;display:grid;gap:8px}
+.next-step h2{margin:0;font-size:16px}
+.next-step ol{margin:0;padding-left:20px;display:grid;gap:4px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:24px;align-items:start}
+@media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center}
+.toolbar span{font-size:13px;color:var(--muted);margin-right:4px}
+.chip-btn{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:999px;padding:4px 12px;cursor:pointer}
+.chip-btn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.tasks{display:grid;gap:8px}
+details.task{background:var(--surface);border:1px solid var(--line);border-radius:10px}
+details.task[open]{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+details.task>summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 14px}
+details.task>summary::-webkit-details-marker{display:none}
+.tid{font-family:var(--mono);font-weight:500;font-size:14px;width:36px;height:36px;border-radius:8px;display:grid;place-items:center;background:var(--sunk);color:var(--muted)}
+.task.done .tid{background:var(--done-bg);color:var(--done)}
+.task.next .tid{background:var(--next-bg);color:var(--next)}
+.ttitle{font-weight:600;min-width:0}
+.tphase{display:block;font-size:12px;color:var(--muted);font-weight:500}
+.pill{font-size:12px;font-weight:600;border-radius:999px;padding:3px 10px;white-space:nowrap}
+.pill.done{background:var(--done-bg);color:var(--done)}
+.pill.next{background:var(--next-bg);color:var(--next)}
+.pill.todo{background:var(--todo-bg);color:var(--todo)}
+.tbody{padding:0 14px 14px 70px;display:grid;gap:12px}
+@media (max-width:560px){.tbody{padding-left:14px}}
+.tbody p{margin:0;color:var(--muted);max-width:70ch}
+.subtasks{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.subtasks li{display:grid;grid-template-columns:20px minmax(0,1fr) auto;gap:8px;align-items:start;font-size:14px}
+.check{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--line);margin-top:3px;display:grid;place-items:center}
+.subtasks li.ok .check{background:var(--done);border-color:var(--done)}
+.subtasks li.ok .check::after{content:"";width:8px;height:4px;border-left:2px solid var(--surface);border-bottom:2px solid var(--surface);transform:rotate(-45deg) translate(1px,-1px)}
+.subtasks li.ok .stext{color:var(--muted)}
+.owner{font-size:11px;font-weight:600;border-radius:4px;padding:1px 7px;white-space:nowrap;margin-top:2px}
+.owner.you{background:var(--you-bg);color:var(--you)}
+.owner.bot{background:var(--bot-bg);color:var(--bot)}
+.owner.auto{background:var(--auto-bg);color:var(--auto)}
+.links{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px}
+.links b{font-weight:600;color:var(--muted)}
+aside{display:grid;gap:14px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:grid;gap:10px;min-width:0}
+.panel h3{margin:0;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.kv{display:grid;gap:8px;font-size:14px}
+.kv div{display:grid;gap:1px;min-width:0}
+.kv small{color:var(--muted);font-size:12.5px;overflow-wrap:anywhere}
+.mini{list-style:none;margin:0;padding:0;display:grid;gap:6px;font-size:14px}
+.mini li{display:grid;grid-template-columns:20px minmax(0,1fr);gap:8px}
+.mini li.ok .check{background:var(--done);border-color:var(--done)}
+.mini li.ok .check::after{content:"";width:8px;height:4px;border-left:2px solid var(--surface);border-bottom:2px solid var(--surface);transform:rotate(-45deg) translate(1px,-1px)}
+.legend{display:flex;flex-wrap:wrap;gap:6px}
+.mgroups{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.mgroup{display:grid;grid-template-columns:30px minmax(0,1fr);gap:8px;align-items:start}
+.mtid{font-family:var(--mono);font-size:12px;font-weight:500;width:26px;height:26px;border-radius:6px;display:grid;place-items:center;background:var(--sunk);color:var(--muted)}
+.mtid.done{background:var(--done-bg);color:var(--done)}
+.mtid.next{background:var(--next-bg);color:var(--next)}
+.sgroup{display:grid;gap:6px}
+.sgroup h4{margin:0;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.sgroup p{font-size:14px}
+.prereqs{list-style:none;margin:0;padding:0;display:grid;gap:6px;font-size:14px}
+.prereqs li{display:grid;grid-template-columns:20px minmax(0,1fr);gap:8px;align-items:start}
+.prereqs li.ok .check{background:var(--done);border-color:var(--done)}
+.prereqs li.ok .check::after{content:"";width:8px;height:4px;border-left:2px solid var(--surface);border-bottom:2px solid var(--surface);transform:rotate(-45deg) translate(1px,-1px)}
+.prereqs li.ok span:last-child{color:var(--muted)}
+ol.subtasks{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+ol.subtasks li{display:grid;grid-template-columns:42px minmax(0,1fr) auto 18px;gap:10px;align-items:start;font-size:14px;padding:5px 6px;border-radius:6px}
+ol.subtasks li:nth-child(odd){background:var(--sunk)}
+ol.subtasks .num{font-family:var(--mono);font-size:12px;color:var(--muted);padding-top:2px;font-variant-numeric:tabular-nums}
+ol.subtasks li.ok .stext{color:var(--muted)}
+ol.subtasks .state{color:var(--done);font-weight:700;text-align:center}
+.slinks{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12.5px;margin-top:2px}
+.none{font-size:14px;color:var(--muted);margin:0}
+.owner.agent{background:var(--agent-bg);color:var(--agent)}
+@media (max-width:560px){ol.subtasks li{grid-template-columns:36px minmax(0,1fr) 18px}ol.subtasks .owner{grid-column:2;justify-self:start}}
+footer{margin-top:28px;font-size:13px;color:var(--muted)}
+@media (prefers-reduced-motion:no-preference){details.task>summary{transition:background .15s}details.task>summary:hover{background:var(--sunk);border-radius:10px}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow">Panel de avance · actualizado el 4 oct 2026</div>
+      <h1>POC ALM agéntico</h1>
+      <p class="sub">Ciclo de vida completo de una API con agentes: de la petición a la retirada, con humanos aprobando cada paso que importa.</p>
+    </div>
+    <div class="progress" aria-label="Avance">
+      <div class="bar" id="bar"></div>
+      <div class="progress-legend" id="legend"></div>
+    </div>
+    <section class="next-step" aria-labelledby="ns-title">
+      <h2 id="ns-title">Tu siguiente paso · tarea 4</h2>
+      <ol>
+        <li>Fusiona <a href="https://github.com/acbacb77/poc-almagentic-core/pull/5">core#5</a> (la bitácora en el repo).</li>
+        <li>Responde en <a href="https://github.com/acbacb77/poc-almagentic-app/issues/5">#5 Catálogo de productos</a> las preguntas abiertas del triage (datos, precio, paginación, acceso, formato del 404).</li>
+        <li>Añade la etiqueta <span class="mono">aprobado</span> al #5.</li>
+        
+      </ol>
+    </section>
+  </header>
+
+  <div class="layout">
+    <main>
+      <div class="toolbar" role="group" aria-label="Filtro">
+        <span>Mostrar</span>
+        <button class="chip-btn" type="button" id="f-all" aria-pressed="true">Todas</button>
+        <button class="chip-btn" type="button" id="f-open" aria-pressed="false">Por hacer</button>
+        <button class="chip-btn" type="button" id="f-you" aria-pressed="false">Con pasos míos pendientes</button>
+      </div>
+      <div class="tasks" id="tasks"></div>
+    </main>
+
+    <aside>
+      <section class="panel">
+        <h3>Quién hace cada subtarea</h3>
+        <div class="legend">
+          <span class="owner you">Usuario</span><span class="owner bot">Claude</span><span class="owner agent">Agente</span><span class="owner auto">Automático</span>
+        </div>
+      </section>
+      <section class="panel">
+        <h3>Repos</h3>
+        <div class="kv">
+          <div><a href="https://github.com/acbacb77/poc-almagentic-app">poc-almagentic-app</a><small>Código, specs y harness · escribe el agente vía PR</small></div>
+          <div><a href="https://github.com/acbacb77/poc-almagentic-core">poc-almagentic-core</a><small>Workflows y estándares · solo humanos · versión <span class="mono">v1</span></small></div>
+          <div><a href="https://github.com/acbacb77/poc-almagentic-gitops">poc-almagentic-gitops</a><small>Estado del cluster · Argo CD</small></div>
+        </div>
+      </section>
+      <section class="panel">
+        <h3>Identidades y secretos</h3>
+        <div class="kv">
+          <div><span class="mono">almagentic-agent</span><small>App 5179760 · solo app · sin permiso Workflows</small></div>
+          <div><span class="mono">almagentic-promoter-gitops</span><small>App 5179780 · solo gitops · tarea 10</small></div>
+          <div><span class="mono">CLAUDE_CODE_OAUTH_TOKEN</span><small>Secreto de Actions en app · caduca al año</small></div>
+          <div><span class="mono">agent.pem</span><small>%USERPROFILE%\.config\almagentic\agent\</small></div>
+        </div>
+      </section>
+      <section class="panel">
+        <h3>Documentación</h3>
+        <div class="kv">
+          <div><a href="https://github.com/acbacb77/poc-almagentic-core/blob/docs/bitacora/docs/poc/README.md">Bitácora completa</a><small>Pasos, PRs, pruebas y problemas resueltos</small></div>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <footer>Fuente de verdad: <span class="mono">poc-almagentic-core/docs/poc/README.md</span>. Este panel se republica al cerrar cada tarea.</footer>
+</div>
+
+<script>
+const TASKS = [
+ {
+  "id": "1",
+  "title": "Definir alcance y stack",
+  "phase": "Gobierno",
+  "status": "done",
+  "desc": "GitHub + Actions con 3 repos públicos, Claude Code, FastAPI y Kubernetes local con Argo CD.",
+  "prereqs": [],
+  "subs": [
+   [
+    "Decidir plataforma de código y CI: GitHub + Actions",
+    "usuario",
+    true,
+    []
+   ],
+   [
+    "Decidir el agente: Claude Code",
+    "usuario",
+    true,
+    []
+   ],
+   [
+    "Decidir la app: API REST en Python/FastAPI",
+    "usuario",
+    true,
+    []
+   ],
+   [
+    "Decidir staging: Kubernetes de Docker Desktop + Argo CD",
+    "usuario",
+    true,
+    []
+   ],
+   [
+    "Decidir la separación en 3 repos: app, core y gitops",
+    "usuario",
+    true,
+    []
+   ]
+  ]
+ },
+ {
+  "id": "2",
+  "title": "Crear repos y entorno aislado",
+  "phase": "Gobierno",
+  "status": "done",
+  "desc": "Repos, protección de main, identidades de los bots y base de Argo CD.",
+  "prereqs": [
+   [
+    "Cuenta de GitHub",
+    true
+   ],
+   [
+    "Suscripción de Claude (Pro o superior)",
+    true
+   ]
+  ],
+  "subs": [
+   [
+    "Crear los 3 repos públicos",
+    "usuario",
+    true,
+    []
+   ],
+   [
+    "Vincular GitHub con Claude (claude.ai → Settings → Connectors)",
+    "usuario",
+    true,
+    []
+   ],
+   [
+    "Estructura base y bootstrap de Argo CD en los 3 repos",
+    "claude",
+    true,
+    []
+   ],
+   [
+    "Ruleset de main en los 3 repos (core sin Code Owners)",
+    "usuario",
+    true,
+    []
+   ],
+   [
+    "Verificar los rulesets",
+    "claude",
+    true,
+    []
+   ],
+   [
+    "Crear e instalar la GitHub App almagentic-agent (solo app)",
+    "usuario",
+    true,
+    []
+   ],
+   [
+    "Crear e instalar la GitHub App almagentic-promoter-gitops (solo gitops)",
+    "usuario",
+    true,
+    []
+   ],
+   [
+    "Guardar la clave del promotor fuera de la carpeta agent/",
+    "usuario",
+    false,
+    []
+   ]
+  ]
+ },
+ {
+  "id": "3",
+  "title": "Harness del agente",
+  "phase": "Construcción",
+  "status": "done",
+  "desc": "7 capas de control: contexto, constitución, permisos, hook, sandbox, identidad y plataforma.",
+  "prereqs": [
+   [
+    "VS Code con la extensión Dev Containers",
+    true
+   ],
+   [
+    "Docker Desktop con WSL integration para Ubuntu",
+    true
+   ],
+   [
+    "Clave del agente en %USERPROFILE%\\.config\\almagentic\\agent\\agent.pem",
+    true
+   ]
+  ],
+  "subs": [
+   [
+    "agent-standards v1.0.0 en core",
+    "claude",
+    true,
+    [
+     {
+      "label": "core#1",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/1"
+     }
+    ]
+   ],
+   [
+    "Harness aplicado en app",
+    "claude",
+    true,
+    [
+     {
+      "label": "app#1",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/1"
+     }
+    ]
+   ],
+   [
+    "Fusionar core#1 y app#1 (con bypass)",
+    "usuario",
+    true,
+    []
+   ],
+   [
+    "Arreglos para Windows: saltos de línea LF y aviso de clave",
+    "claude",
+    true,
+    [
+     {
+      "label": "core#2",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/2"
+     },
+     {
+      "label": "app#2",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/2"
+     }
+    ]
+   ],
+   [
+    "Montar la carpeta de la clave en vez del fichero",
+    "claude",
+    true,
+    [
+     {
+      "label": "core#3",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/3"
+     },
+     {
+      "label": "app#3",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/3"
+     }
+    ]
+   ],
+   [
+    "Fusionar core#2, core#3, app#2 y app#3",
+    "usuario",
+    true,
+    []
+   ],
+   [
+    "Abrir el repo en el devcontainer (Rebuild Container)",
+    "usuario",
+    true,
+    []
+   ],
+   [
+    "Arrancar el agente con start-agent.sh e iniciar sesión en Claude",
+    "usuario",
+    true,
+    []
+   ],
+   [
+    "Probar los bloqueos del harness",
+    "usuario",
+    true,
+    []
+   ]
+  ]
+ },
+ {
+  "id": "A",
+  "title": "Entrada de demanda con agente de triage",
+  "phase": "Demanda",
+  "status": "done",
+  "desc": "Plantilla de petición; Claude sin herramientas propone y un script valida y aplica. Decide un humano con la etiqueta aprobado.",
+  "prereqs": [
+   [
+    "Token de CI generado con claude setup-token y validado",
+    true
+   ],
+   [
+    "Secreto CLAUDE_CODE_OAUTH_TOKEN en Actions de app (no en Agents)",
+    true
+   ]
+  ],
+  "subs": [
+   [
+    "Workflow de triage en core",
+    "claude",
+    true,
+    [
+     {
+      "label": "core#4",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/4"
+     }
+    ]
+   ],
+   [
+    "Plantilla de petición y workflow en app",
+    "claude",
+    true,
+    [
+     {
+      "label": "app#4",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/4"
+     }
+    ]
+   ],
+   [
+    "Crear las 18 etiquetas de triage",
+    "claude",
+    true,
+    []
+   ],
+   [
+    "Fusionar core#4 y app#4",
+    "usuario",
+    true,
+    []
+   ],
+   [
+    "Publicar la release v1 en core",
+    "usuario",
+    true,
+    []
+   ],
+   [
+    "Probar con una petición normal y una inyección",
+    "usuario",
+    true,
+    [
+     {
+      "label": "#5 Catálogo",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/issues/5"
+     },
+     {
+      "label": "#6 Inyección",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/issues/6"
+     }
+    ]
+   ],
+   [
+    "Mostrar en el comentario el motivo cuando el modelo falla",
+    "claude",
+    false,
+    []
+   ]
+  ]
+ },
+ {
+  "id": "4",
+  "title": "Spec de la feature con Spec Kit",
+  "phase": "Demanda",
+  "status": "next",
+  "desc": "El agente escribe spec, plan y tareas del catálogo de productos a partir del issue aprobado.",
+  "prereqs": [],
+  "subs": [
+   [
+    "Responder las preguntas abiertas del #5",
+    "usuario",
+    false,
+    [
+     {
+      "label": "#5 Catálogo",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/issues/5"
+     }
+    ]
+   ],
+   [
+    "Añadir la etiqueta aprobado al #5",
+    "usuario",
+    false,
+    []
+   ],
+   [
+    "Añadir Spec Kit al devcontainer",
+    "claude",
+    false,
+    []
+   ],
+   [
+    "Generar specs/001-catalogo-productos (spec, plan y tareas)",
+    "agente",
+    false,
+    []
+   ],
+   [
+    "Revisar y aprobar el PR de la spec",
+    "usuario",
+    false,
+    []
+   ]
+  ]
+ },
+ {
+  "id": "5",
+  "title": "Implementación por el agente + tests",
+  "phase": "Construcción",
+  "status": "todo",
+  "desc": "El agente implementa las tareas de la spec en el devcontainer y abre un PR firmado por el bot.",
+  "prereqs": [],
+  "subs": [
+   [
+    "Lanzar el agente sobre la spec aprobada",
+    "usuario",
+    false,
+    []
+   ],
+   [
+    "Implementar las tareas con sus tests",
+    "agente",
+    false,
+    []
+   ],
+   [
+    "Abrir el PR como almagentic-agent[bot]",
+    "agente",
+    false,
+    []
+   ],
+   [
+    "Revisar y aprobar el PR",
+    "usuario",
+    false,
+    []
+   ]
+  ]
+ },
+ {
+  "id": "6",
+  "title": "CI: build, tests y lint",
+  "phase": "Calidad",
+  "status": "todo",
+  "desc": "Workflow reutilizable en core que valida cada PR en una máquina limpia.",
+  "prereqs": [],
+  "subs": [
+   [
+    "Workflow reutilizable de CI en core",
+    "claude",
+    false,
+    []
+   ],
+   [
+    "Llamada al CI desde app",
+    "claude",
+    false,
+    []
+   ],
+   [
+    "Fusionar y crear la etiqueta de versión de core",
+    "usuario",
+    false,
+    []
+   ],
+   [
+    "Marcar el check de CI como obligatorio en el ruleset de app",
+    "usuario",
+    false,
+    []
+   ]
+  ]
+ },
+ {
+  "id": "7",
+  "title": "Scan de seguridad",
+  "phase": "Calidad",
+  "status": "todo",
+  "desc": "SAST, dependencias, secretos, configuración del agente y ficheros generados en PRs.",
+  "prereqs": [],
+  "subs": [
+   [
+    "Workflow reutilizable de seguridad en core",
+    "claude",
+    false,
+    []
+   ],
+   [
+    "Detectar ficheros generados y cambios en la config del agente",
+    "claude",
+    false,
+    []
+   ],
+   [
+    "Fusionar, etiqueta de core y check obligatorio",
+    "usuario",
+    false,
+    []
+   ]
+  ]
+ },
+ {
+  "id": "8",
+  "title": "Agente revisor y respuesta a @claude",
+  "phase": "Calidad",
+  "status": "todo",
+  "desc": "Revisión automática contra la spec y cambios a petición, solo para usuarios con escritura.",
+  "prereqs": [
+   [
+    "Clave de almagentic-agent como secreto de Actions en app",
+    false
+   ]
+  ],
+  "subs": [
+   [
+    "Revisión automática de PRs contra la spec",
+    "claude",
+    false,
+    []
+   ],
+   [
+    "Respuesta a @claude solo para colaboradores",
+    "claude",
+    false,
+    []
+   ],
+   [
+    "Probar con un comentario en un PR",
+    "usuario",
+    false,
+    []
+   ]
+  ]
+ },
+ {
+  "id": "9",
+  "title": "Supply chain",
+  "phase": "Entrega",
+  "status": "todo",
+  "desc": "SBOM, firma de la imagen y provenance.",
+  "prereqs": [],
+  "subs": [
+   [
+    "SBOM, firma y atestación de la imagen",
+    "claude",
+    false,
+    []
+   ],
+   [
+    "Fusionar y etiqueta de core",
+    "usuario",
+    false,
+    []
+   ]
+  ]
+ },
+ {
+  "id": "10",
+  "title": "Deploy GitOps con gate humano",
+  "phase": "Entrega",
+  "status": "todo",
+  "desc": "El bot promotor abre un PR en gitops; tu merge despliega con Argo CD en el cluster local.",
+  "prereqs": [
+   [
+    "Kubernetes activado en Docker Desktop con 8 GB",
+    false
+   ],
+   [
+    "Argo CD instalado y bootstrap/root-app.yaml aplicado",
+    false
+   ],
+   [
+    "Clave del promotor como secreto de Actions en app",
+    false
+   ]
+  ],
+  "subs": [
+   [
+    "Manifiestos de la app en gitops",
+    "claude",
+    false,
+    []
+   ],
+   [
+    "Workflow de promoción en core",
+    "claude",
+    false,
+    []
+   ],
+   [
+    "Aprobar el PR de promoción en gitops",
+    "usuario",
+    false,
+    []
+   ],
+   [
+    "Argo CD sincroniza el cluster",
+    "auto",
+    false,
+    []
+   ]
+  ]
+ },
+ {
+  "id": "B",
+  "title": "Gestión de releases",
+  "phase": "Entrega",
+  "status": "todo",
+  "desc": "Versionado semántico, changelog y notas; automatizar las etiquetas de core.",
+  "prereqs": [],
+  "subs": [
+   [
+    "Versionado y notas de versión con release-please",
+    "claude",
+    false,
+    []
+   ],
+   [
+    "Automatizar las etiquetas de core (vX.Y.Z y mover v1)",
+    "claude",
+    false,
+    []
+   ],
+   [
+    "Hasta entonces, crear o mover etiquetas de core a mano",
+    "usuario",
+    false,
+    []
+   ]
+  ]
+ },
+ {
+  "id": "11",
+  "title": "Cerrar el loop de operación",
+  "phase": "Operación",
+  "status": "todo",
+  "desc": "Alerta → issue → agente → PR, y panel de telemetría de los agentes.",
+  "prereqs": [
+   [
+    "Token del puente alerta → issue como secreto del cluster",
+    false
+   ]
+  ],
+  "subs": [
+   [
+    "Prometheus, Grafana y Alertmanager en el cluster",
+    "claude",
+    false,
+    []
+   ],
+   [
+    "Puente alerta → issue",
+    "claude",
+    false,
+    []
+   ],
+   [
+    "Collector OpenTelemetry y panel de actividad de los agentes",
+    "claude",
+    false,
+    []
+   ],
+   [
+    "Provocar una alerta y seguir el ciclo",
+    "usuario",
+    false,
+    []
+   ]
+  ]
+ },
+ {
+  "id": "C",
+  "title": "Mantenimiento continuo",
+  "phase": "Operación",
+  "status": "todo",
+  "desc": "Actualización de dependencias y evals del harness al cambiar de modelo.",
+  "prereqs": [],
+  "subs": [
+   [
+    "Dependabot en app",
+    "claude",
+    false,
+    []
+   ],
+   [
+    "Evals del harness al cambiar de modelo",
+    "claude",
+    false,
+    []
+   ]
+  ]
+ },
+ {
+  "id": "D",
+  "title": "Retirada de un endpoint v1",
+  "phase": "Retirada",
+  "status": "todo",
+  "desc": "v2 del catálogo con importe y moneda; deprecación, migración y retirada de v1.",
+  "prereqs": [],
+  "subs": [
+   [
+    "Abrir la petición de la v2",
+    "usuario",
+    false,
+    []
+   ],
+   [
+    "Implementar /api/v2 con importe y moneda",
+    "agente",
+    false,
+    []
+   ],
+   [
+    "Marcar v1 como deprecada (cabeceras Deprecation y Sunset)",
+    "agente",
+    false,
+    []
+   ],
+   [
+    "Retirar v1",
+    "agente",
+    false,
+    []
+   ],
+   [
+    "Aprobar cada PR",
+    "usuario",
+    false,
+    []
+   ]
+  ]
+ },
+ {
+  "id": "E",
+  "title": "Informe de trazabilidad",
+  "phase": "Gobierno",
+  "status": "todo",
+  "desc": "Cada release enlaza petición, spec, PR, escaneos, aprobaciones y despliegue.",
+  "prereqs": [],
+  "subs": [
+   [
+    "Generador del informe por release",
+    "claude",
+    false,
+    []
+   ],
+   [
+    "Revisar el informe",
+    "usuario",
+    false,
+    []
+   ]
+  ]
+ },
+ {
+  "id": "12",
+  "title": "Guion y ensayo de la demo",
+  "phase": "Gobierno",
+  "status": "todo",
+  "desc": "Narrativa, métricas y plan B grabado.",
+  "prereqs": [],
+  "subs": [
+   [
+    "Guion de la demo",
+    "claude",
+    false,
+    []
+   ],
+   [
+    "Ensayo y grabación del plan B",
+    "usuario",
+    false,
+    []
+   ]
+  ]
+ }
+];
+// END TASKS
+
+const OWNER = { usuario: ["Usuario", "you"], claude: ["Claude", "bot"], agente: ["Agente", "agent"], auto: ["Automático", "auto"] };
+const STATUS = { done: "Hecha", next: "Siguiente", todo: "Pendiente" };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const mine = t => t.prereqs.some(p => !p[1]) || t.subs.some(s => s[1] === "usuario" && !s[2]);
+
+function card(t) {
+  const prereqs = t.prereqs.length
+    ? `<ul class="prereqs">${t.prereqs.map(([txt, ok]) => `<li class="${ok ? "ok" : ""}"><span class="check" aria-hidden="true"></span><span>${esc(txt)}</span></li>`).join("")}</ul>`
+    : `<p class="none">Ninguno nuevo.</p>`;
+  const subs = `<ol class="subtasks">${t.subs.map(([txt, who, ok, links], i) => `
+    <li class="${ok ? "ok" : ""}">
+      <span class="num">${esc(t.id)}.${i + 1}</span>
+      <span class="stext">${esc(txt)}${links.length ? `<span class="slinks">${links.map(l => `<a href="${l.href}">${esc(l.label)}</a>`).join("")}</span>` : ""}</span>
+      <span class="owner ${OWNER[who][1]}">${OWNER[who][0]}</span>
+      <span class="state" aria-label="${ok ? "hecha" : "pendiente"}">${ok ? "✓" : ""}</span>
+    </li>`).join("")}</ol>`;
+  return `
+  <details class="task ${t.status}" ${t.status === "next" ? "open" : ""}>
+    <summary>
+      <span class="tid">${esc(t.id)}</span>
+      <span class="ttitle">${esc(t.title)}<span class="tphase">${esc(t.phase)}</span></span>
+      <span class="pill ${t.status}">${STATUS[t.status]}</span>
+    </summary>
+    <div class="tbody">
+      <p>${esc(t.desc)}</p>
+      <div class="sgroup"><h4>Prerrequisitos manuales</h4>${prereqs}</div>
+      <div class="sgroup"><h4>Subtareas</h4>${subs}</div>
+      ${t.status === "todo" ? '<p class="none">Subtareas previstas: se ajustarán al llegar a la tarea.</p>' : ""}
+    </div>
+  </details>`;
+}
+
+function render(filter) {
+  const list = TASKS.filter(t => filter === "open" ? t.status !== "done" : filter === "you" ? mine(t) : true);
+  document.getElementById("tasks").innerHTML = list.map(card).join("") || '<p class="sub">No hay tareas con ese filtro.</p>';
+}
+
+function header() {
+  const done = TASKS.filter(t => t.status === "done").length;
+  document.getElementById("bar").innerHTML = TASKS.map(t => `<span class="${t.status}" title="${esc(t.id + " · " + t.title)}"></span>`).join("");
+  const pending = TASKS.reduce((n, t) => n + t.prereqs.filter(p => !p[1]).length + t.subs.filter(s => s[1] === "usuario" && !s[2]).length, 0);
+  document.getElementById("legend").innerHTML =
+    `<span><b>${done} de ${TASKS.length}</b> tareas hechas</span><span><b>${Math.round(done / TASKS.length * 100)} %</b> del plan</span><span><b>${pending}</b> pasos tuyos pendientes en todo el plan</span>`;
+}
+
+const buttons = { all: "f-all", open: "f-open", you: "f-you" };
+Object.entries(buttons).forEach(([key, id]) => document.getElementById(id).addEventListener("click", () => {
+  Object.values(buttons).forEach(b => document.getElementById(b).setAttribute("aria-pressed", String(b === id)));
+  render(key);
+}));
+header();
+render("all");
+</script>
