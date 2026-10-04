@@ -4,7 +4,7 @@ Registro de todo lo hecho en la POC: decisiones, pasos manuales, PRs y problemas
 
 **Última actualización:** 4 de octubre de 2026 · **Avance:** 4 de 17 tareas (1, 2, 3 y A)
 
-**Leyenda de responsables:** 👤 tú (acción manual) · 🤖 Claude (sesión de trabajo) · ⚙️ automático (GitHub Actions / agentes de la POC)
+**Cada tarea empieza por su configuración manual 👤.** **Leyenda de responsables:** 👤 tú (acción manual) · 🤖 Claude (sesión de trabajo) · ⚙️ automático (GitHub Actions / agentes de la POC)
 
 ---
 
@@ -68,6 +68,12 @@ Registro de todo lo hecho en la POC: decisiones, pasos manuales, PRs y problemas
 
 ## Tarea 1 · Definir alcance y stack ✅
 
+### Configuración manual 👤
+
+Ninguna: solo decisiones.
+
+### Decisiones
+
 | Decisión | Elección | Motivo |
 |---|---|---|
 | Código y CI | GitHub + Actions, 3 repos públicos | Gratis en GitHub Free; en privado, aprobaciones de despliegue y atestaciones exigen planes de pago |
@@ -81,34 +87,55 @@ Registro de todo lo hecho en la POC: decisiones, pasos manuales, PRs y problemas
 
 ## Tarea 2 · Crear repos y entorno aislado ✅
 
-| # | Paso | Quién | Resultado |
-|---|---|---|---|
-| 2.1 | Crear los 3 repos públicos en GitHub | 👤 | `poc-almagentic-app`, `-core`, `-gitops` |
-| 2.2 | Vincular GitHub con Claude (claude.ai → Settings → Connectors → GitHub) | 👤 | La sesión puede subir ramas y abrir PRs |
-| 2.3 | Estructura base: README, devcontainer, CODEOWNERS, `.gitignore`, bootstrap de Argo CD (`bootstrap/root-app.yaml`, namespace `staging`) | 🤖 | Commit inicial en los 3 repos |
-| 2.4 | Rulesets en `main` de cada repo (detalle abajo) | 👤 | Verificados por 🤖 |
-| 2.5 | Crear las 2 GitHub Apps (detalle abajo) | 👤 | App IDs 5179760 y 5179780 |
-| 2.6 | Guardar la clave del promotor fuera de la carpeta `agent/` | 👤 | **Pendiente**: se usa en la tarea 10 |
+### Configuración manual 👤
 
-**2.4 · Ruleset `main`** (Settings → Rules → Rulesets → New branch ruleset):
+| # | Paso | Dónde | Estado |
+|---|---|---|---|
+| 2.1 | Crear los 3 repos públicos | GitHub | ✅ |
+| 2.2 | Vincular GitHub con Claude | claude.ai → Settings → Connectors → GitHub | ✅ |
+| 2.3 | Ruleset `main` en los 3 repos (detalle abajo) | Settings → Rules → Rulesets | ✅ |
+| 2.4 | Crear e instalar las 2 GitHub Apps (detalle abajo) | Settings → Developer settings → GitHub Apps | ✅ |
+| 2.5 | Guardar la clave del agente fuera de cualquier repo y borrar la de Descargas | Tu equipo | ✅ |
+| 2.6 | Guardar la clave del promotor fuera de la carpeta `agent/` | Tu equipo | ⬜ se usa en la tarea 10 |
+
+**2.3 · Ruleset `main`:**
 - Enforcement: **Active** · Target: **Include default branch** · Bypass list: **Repository admin**.
 - Reglas: **Restrict deletions**, **Block force pushes**, **Require a pull request before merging** con **Dismiss stale approvals** y **Require conversation resolution**.
 - Aprobaciones: **1** en app y gitops, **0** en core.
 - **Require review from Code Owners**: activado en app y gitops; **desactivado en core** (si no, nadie podría aprobar los PRs del único humano).
 
-**2.5 · GitHub Apps** (Settings → Developer settings → GitHub Apps → New GitHub App):
+**2.4 · GitHub Apps:**
 1. Nombre y *Homepage URL* = URL del repo. *Webhook*: desmarcar **Active**.
 2. *Repository permissions*: solo los de la tabla de identidades. **Nunca** Workflows ni Administration.
 3. *Where can this GitHub App be installed?*: **Only on this account**.
 4. Anotar el **App ID** → **Generate a private key** (descarga un `.pem`).
 5. **Install App** → **Only select repositories** → el repo correspondiente.
-6. Guardar el `.pem` fuera de cualquier repo y borrar el de Descargas. No pegarlo nunca en un chat.
+6. No pegar nunca la clave en un chat.
+
+### Trabajo de Claude 🤖
+
+- Estructura base en los 3 repos: README, devcontainer, CODEOWNERS, `.gitignore` y bootstrap de Argo CD (`bootstrap/root-app.yaml`, namespace `staging`).
+- Verificación de los rulesets vía API.
 
 ---
 
 ## Tarea 3 · Harness del agente ✅
 
-### Qué se construyó
+### Configuración manual 👤
+
+| # | Paso | Dónde | Estado |
+|---|---|---|---|
+| 3.1 | Fusionar los PRs del harness (con bypass) | GitHub | ✅ |
+| 3.2 | Instalar la extensión **Dev Containers** | VS Code | ✅ |
+| 3.3 | Activar **WSL integration** para Ubuntu (o desmarcar *Dev › Containers: Mount Wayland Socket*) | Docker Desktop → Settings → Resources | ✅ |
+| 3.4 | Copiar la clave del agente a `%USERPROFILE%\.config\almagentic\agent\agent.pem` (el repo está en `c:\repos\...`) | Tu equipo | ✅ |
+| 3.5 | Abrir **solo la carpeta del repo** → `Ctrl+Shift+P` → **Dev Containers: Reopen in Container** (**Rebuild Container** si cambian montajes) | VS Code | ✅ |
+| 3.6 | Comprobar la clave: `ls -l /run/secrets/agent/` → `agent.pem` como fichero | Terminal del contenedor | ✅ |
+| 3.7 | Arrancar el agente: `.devcontainer/start-agent.sh` → `Agente: almagentic-agent[bot] · … · token válido hasta …` | Terminal del contenedor | ✅ |
+| 3.8 | Iniciar sesión en Claude Code con la **cuenta de Claude** (no Console/API) | Claude Code | ✅ |
+| 3.9 | Probar los bloqueos del harness (tabla de pruebas) | Claude Code | ✅ |
+
+### Trabajo de Claude 🤖
 
 | PR | Contenido |
 |---|---|
@@ -129,18 +156,6 @@ Registro de todo lo hecho en la POC: decisiones, pasos manuales, PRs y problemas
 | 6. Identidad | GitHub App `almagentic-agent` | Token de 1 hora, un solo repo, sin permiso Workflows | **Sí** |
 | 7. Plataforma | CODEOWNERS + ruleset | PR obligatorio y aprobación humana | **Sí** |
 
-### Preparación del puesto local (una vez)
-
-| # | Paso | Quién |
-|---|---|---|
-| 3.1 | Instalar la extensión **Dev Containers** en VS Code | 👤 |
-| 3.2 | Docker Desktop → Settings → Resources → **WSL integration** → activar Ubuntu | 👤 |
-| 3.3 | Copiar la clave del agente a `%USERPROFILE%\.config\almagentic\agent\agent.pem` (el repo está en `c:\repos\...`) | 👤 |
-| 3.4 | Abrir **solo la carpeta del repo** (no un workspace con varias) → `Ctrl+Shift+P` → **Dev Containers: Reopen in Container** (o **Rebuild Container** si cambian montajes) | 👤 |
-| 3.5 | En el terminal del contenedor: `ls -l /run/secrets/agent/` → debe salir `agent.pem` como fichero | 👤 |
-| 3.6 | `.devcontainer/start-agent.sh` → `Agente: almagentic-agent[bot] · … · token válido hasta …` | 👤 |
-| 3.7 | Iniciar sesión en Claude Code con la **cuenta de Claude** (no Console/API) y pegar el código del navegador | 👤 |
-
 ### Pruebas realizadas
 
 | Prueba (en Claude Code) | Capa que lo para | Resultado |
@@ -155,30 +170,31 @@ Registro de todo lo hecho en la POC: decisiones, pasos manuales, PRs y problemas
 
 ## Tarea A · Entrada de demanda con agente de triage ✅
 
-### Qué se construyó
+### Configuración manual 👤
+
+| # | Paso | Dónde | Estado |
+|---|---|---|---|
+| A.1 | Fusionar core#4 y app#4 | GitHub | ✅ |
+| A.2 | Crear la etiqueta `v1`: Releases → Draft a new release → Choose a tag `v1` → Create new tag on publish → Target `main` → Publish | core → Releases | ✅ |
+| A.3 | Generar el token con `claude setup-token` (terminal amplio para que no se parta) | Devcontainer o WSL | ✅ |
+| A.4 | Validarlo: `read -rs TOKEN; CLAUDE_CODE_OAUTH_TOKEN="$TOKEN" claude -p "Responde solo: OK"` | Devcontainer o WSL | ✅ |
+| A.5 | Guardarlo como `CLAUDE_CODE_OAUTH_TOKEN` en **Actions** (no *Agents*) y después `unset TOKEN` | app → Settings → Secrets and variables | ✅ |
+| A.6 | Abrir dos peticiones de prueba con la plantilla **Petición** | app → Issues | ✅ |
+
+### Trabajo de Claude 🤖
 
 | PR | Contenido |
 |---|---|
 | [core#4](https://github.com/acbacb77/poc-almagentic-core/pull/4) | `reusable-triage.yml` (job `analyze` sin herramientas + job `apply` determinista), `prompts/triage.md`, `scripts/triage/` (+13 tests) |
 | [app#4](https://github.com/acbacb77/poc-almagentic-app/pull/4) | Plantilla **Petición**, sin issues en blanco, `triage.yml`, sección *Pedir algo* del README, `.gitignore` con `devcontainer-lock.json` |
 
-### Pasos
+Además, creación de las 18 etiquetas (`tipo:*`, `prioridad:*`, `tamano:*`, `triage:*`, `aprobado`) vía API.
 
-| # | Paso | Quién |
-|---|---|---|
-| A.1 | Crear las 18 etiquetas (`tipo:*`, `prioridad:*`, `tamano:*`, `triage:*`, `aprobado`) en app | 🤖 vía API |
-| A.2 | Fusionar core#4 y app#4 | 👤 |
-| A.3 | Crear la etiqueta `v1` en core: Releases → Draft a new release → Choose a tag `v1` → Create new tag on publish → Target `main` → Publish | 👤 |
-| A.4 | Generar el token: `claude setup-token` (terminal amplio para que no se parta) | 👤 |
-| A.5 | Validarlo antes de guardarlo: `read -rs TOKEN; CLAUDE_CODE_OAUTH_TOKEN="$TOKEN" claude -p "Responde solo: OK"` | 👤 |
-| A.6 | Guardarlo en app → Settings → Secrets and variables → **Actions** (no *Agents*) como `CLAUDE_CODE_OAUTH_TOKEN`. Después `unset TOKEN` | 👤 |
-| A.7 | Probar con dos peticiones | 👤 |
-
-### Cómo funciona
+### Cómo funciona ⚙️
 
 1. Alguien abre un issue con la plantilla **Petición** → etiqueta `triage:pendiente`.
-2. ⚙️ `analyze`: Claude lee la petición **sin herramientas ni permiso de escritura** y devuelve JSON.
-3. ⚙️ `apply`: un script valida el JSON contra listas cerradas, comprueba que los issues citados existen, neutraliza menciones y HTML, y pone etiquetas y comentario.
+2. `analyze`: Claude lee la petición **sin herramientas ni permiso de escritura** y devuelve JSON.
+3. `apply`: un script valida el JSON contra listas cerradas, comprueba que los issues citados existen, neutraliza menciones y HTML, y pone etiquetas y comentario.
 4. 👤 Un responsable decide: añade `aprobado`, cambia etiquetas o pide más información. `triage:repetir` vuelve a lanzarlo.
 5. Peticiones de personas sin acceso al repo: `triage:manual`, sin pasar por el modelo.
 
@@ -191,35 +207,71 @@ Registro de todo lo hecho en la POC: decisiones, pasos manuales, PRs y problemas
 
 ---
 
-## Configuración manual por tarea
+## Tarea 4 · Spec de la feature con Spec Kit ⏭️
 
-Todo lo que hay que hacer a mano, en el orden en que lo pide cada tarea. Los pasos detallados están en la sección de cada tarea.
+### Configuración manual 👤
 
-| Tarea | Configuración manual | Dónde | Estado |
+| # | Paso | Dónde | Estado |
 |---|---|---|---|
-| 2 | Crear los 3 repos públicos | GitHub | ✅ |
-| 2 | Vincular GitHub con Claude | claude.ai → Settings → Connectors | ✅ |
-| 2 | Ruleset `main` en app, core y gitops (core sin Code Owners) | Settings → Rules → Rulesets | ✅ |
-| 2 | Crear e instalar la GitHub App `almagentic-agent` (solo app) | Settings → Developer settings → GitHub Apps | ✅ |
-| 2 | Crear e instalar la GitHub App `almagentic-promoter-gitops` (solo gitops) | Settings → Developer settings → GitHub Apps | ✅ |
-| 2 | Guardar las dos claves `.pem` fuera de cualquier repo y borrar las de Descargas | Tu equipo | ✅ agente · ⬜ promotor |
-| 3 | Extensión **Dev Containers** en VS Code | VS Code | ✅ |
-| 3 | **WSL integration** para Ubuntu (o desmarcar *Mount Wayland Socket*) | Docker Desktop → Settings → Resources | ✅ |
-| 3 | Clave del agente en `%USERPROFILE%\.config\almagentic\agent\agent.pem` | Tu equipo | ✅ |
-| 3 | Abrir solo la carpeta del repo y **Rebuild Container** | VS Code | ✅ |
-| 3 | Login de Claude Code con la cuenta de Claude (no Console) | Devcontainer | ✅ |
-| 3 | Fusionar los PRs del harness con bypass | GitHub | ✅ |
-| A | Release con la etiqueta `v1` en core | core → Releases | ✅ |
-| A | Generar el token con `claude setup-token` y validarlo | Devcontainer o WSL | ✅ |
-| A | Secreto `CLAUDE_CODE_OAUTH_TOKEN` en **Actions** (no *Agents*) | app → Settings → Secrets and variables | ✅ |
-| 4 | Responder las preguntas abiertas del #5 y añadir `aprobado` | Issue #5 | ⬜ |
-| 10 | Activar Kubernetes en Docker Desktop con 8 GB de memoria | Docker Desktop | ⬜ |
-| 10 | Instalar Argo CD y aplicar `bootstrap/root-app.yaml` (README de gitops) | Terminal WSL | ⬜ |
-| 10 | Subir la clave del promotor como secreto de Actions en app | app → Settings → Secrets and variables | ⬜ |
-| B | Hasta automatizarlo: crear o mover etiquetas de versión de core | core → Releases | ⬜ cuando haya cambios en core |
-| 11 | Crear a mano el token del puente alerta → issue como secreto del cluster | Terminal WSL (`kubectl`) | ⬜ |
+| 4.1 | Fusionar core#5 (esta bitácora) | GitHub | ⬜ |
+| 4.2 | Responder las preguntas abiertas del triage. Propuesta: lista fija en el código (5-10 productos); precio en euros con 2 decimales, IVA incluido; sin paginación ni filtros; público; 404 con el formato estándar de FastAPI | [Issue #5](https://github.com/acbacb77/poc-almagentic-app/issues/5) | ⬜ |
+| 4.3 | Añadir la etiqueta `aprobado` | Issue #5 | ⬜ |
+| 4.4 | Revisar y aprobar el PR de la spec | app → Pull requests | ⬜ |
 
-Las tareas que no aparecen (1, 5-9, C, D, E, 12) no necesitan configuración manual más allá de revisar y fusionar PRs, o aún no la conocemos. Se añadirá aquí al llegar a cada una.
+### Trabajo del agente
+
+- Generar `specs/001-catalogo-productos/` (spec, plan y tareas) con Spec Kit a partir del issue aprobado.
+
+---
+
+## Tareas 5 a 9 · Implementación, CI, seguridad, revisión y supply chain
+
+### Configuración manual 👤
+
+Por ahora solo revisar y fusionar los PRs. Se detallará al llegar a cada una.
+
+---
+
+## Tarea 10 · Deploy GitOps al cluster local ⬜
+
+### Configuración manual 👤
+
+| # | Paso | Dónde | Estado |
+|---|---|---|---|
+| 10.1 | Activar Kubernetes y asignar al menos 8 GB de memoria | Docker Desktop → Settings | ⬜ |
+| 10.2 | Instalar Argo CD y aplicar `bootstrap/root-app.yaml` (pasos en el README de gitops) | Terminal WSL | ⬜ |
+| 10.3 | Subir la clave del promotor como secreto de Actions en app | app → Settings → Secrets and variables → Actions | ⬜ |
+| 10.4 | Aprobar el PR de promoción en gitops | gitops → Pull requests | ⬜ |
+
+---
+
+## Tarea B · Gestión de releases ⬜
+
+### Configuración manual 👤
+
+| # | Paso | Dónde | Estado |
+|---|---|---|---|
+| B.1 | Hasta automatizarlo: crear o mover las etiquetas de versión de core tras cada cambio en core | core → Releases | ⬜ |
+
+---
+
+## Tarea 11 · Cerrar el loop de operación ⬜
+
+### Configuración manual 👤
+
+| # | Paso | Dónde | Estado |
+|---|---|---|---|
+| 11.1 | Crear el token del puente alerta → issue como secreto del cluster (nunca en git) | Terminal WSL (`kubectl`) | ⬜ |
+
+---
+
+## Tareas C, D, E y 12
+
+### Configuración manual 👤
+
+Por ahora ninguna conocida. Se añadirá al llegar a cada una.
+
+---
 
 ## Problemas encontrados y soluciones
 
@@ -245,19 +297,6 @@ Las tareas que no aparecen (1, 5-9, C, D, E, 12) no necesitan configuración man
 | Subir ramas, abrir PRs, crear etiquetas de issues, leer issues y comentarios | Configurar rulesets, crear tags, leer logs/artefactos/secretos de Actions, aprobar o fusionar PRs |
 
 ---
-
-## Siguiente paso (tarea 4)
-
-1. 👤 Responder en [#5](https://github.com/acbacb77/poc-almagentic-app/issues/5) las preguntas abiertas del triage. Propuesta: datos en una lista fija en el código (5-10 productos); precio en euros con 2 decimales, IVA incluido; sin paginación ni filtros; público; 404 con el formato estándar de FastAPI.
-2. 👤 Añadir la etiqueta `aprobado` al #5.
-3. 🤖 / agente: spec en `specs/001-catalogo-productos/` con Spec Kit.
-
-## Configuración manual que pedirán las próximas tareas
-
-- **Tarea 4:** responder las preguntas abiertas del #5 y añadir `aprobado`.
-- **Tarea 10:** Kubernetes en Docker Desktop (8 GB), Argo CD con `bootstrap/root-app.yaml` y la clave del promotor como secreto de Actions.
-- **Tarea B:** mientras no esté automatizado, crear o mover las etiquetas de versión de core desde Releases.
-- **Tarea 11:** token del puente alerta → issue, creado a mano como secreto del cluster.
 
 ## Pendientes menores
 
