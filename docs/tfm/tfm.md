@@ -63,7 +63,7 @@ Todas las tareas siguen el mismo ciclo:
 
 | Aspecto | Cómo se organiza |
 |---|---|
-| Plan | 17 tareas: 12 principales y 5 extensiones ALM (A a E), detalladas en el capítulo 4 |
+| Plan | 18 tareas: 12 principales y 6 extensiones (A a F), detalladas en el capítulo 4 |
 | Seguimiento | Bitácora versionada y panel de avance en `poc-almagentic-core`; esta memoria se regenera al cerrar cada tarea |
 | Registro | El capítulo 6 recoge todas las iteraciones con el asistente |
 
@@ -219,6 +219,7 @@ El diseño del capítulo 4 parte de estas cuatro medidas.
 | Modelo de despliegue | GitOps *pull* | *Push* desde CI | GitHub nunca necesita acceso de red al portátil |
 | Identidad del agente | GitHub App | Segunda cuenta de usuario | Tokens de 1 hora, permisos por repositorio, patrón empresarial |
 | Aprobación humana del despliegue | Merge aprobado en gitops | Entornos protegidos de Actions | Funciona igual en repos públicos y deja rastro en git |
+| Ejecución del agente de código | Devcontainer interactivo y, con la extensión F, GitHub Actions disparado por la etiqueta `aprobado` y el merge de la spec | Solo devcontainer; solo Actions | El devcontainer permite trabajar en pareja con el agente y enseñar el harness; Actions quita los prompts manuales sin añadir ni quitar aprobaciones humanas |
 
 ## Arquitectura
 
@@ -255,7 +256,7 @@ La App del agente no tiene el permiso *Workflows*, así que GitHub rechaza cualq
 
 ## Plan de trabajo
 
-El plan original de 12 tareas cubría el SDLC. Al analizar el alcance del ALM se añadieron cinco extensiones (A a E) para cubrir demanda, *releases*, mantenimiento, retirada y trazabilidad:
+El plan original de 12 tareas cubría el SDLC. Al analizar el alcance del ALM se añadieron cinco extensiones (A a E) para cubrir demanda, *releases*, mantenimiento, retirada y trazabilidad. Más tarde se añadió la F, que lanza al agente de código desde GitHub Actions para que el desarrollador no tenga que escribirle un prompt en cada feature:
 
 | # | Tarea | Tipo | Fase ALM |
 |---|---|---|---|
@@ -268,6 +269,7 @@ El plan original de 12 tareas cubría el SDLC. Al analizar el alcance del ALM se
 | 6 | CI: build, tests y lint | Principal | Calidad |
 | 7 | Scan de seguridad | Principal | Calidad |
 | 8 | Agente revisor y respuesta a `@claude` | Principal | Calidad |
+| ↳ F | Agente autónomo en Actions | Extensión | Construcción |
 | 9 | Supply chain: SBOM, firma y procedencia | Principal | Entrega |
 | 10 | Deploy GitOps con gate humano | Principal | Entrega |
 | ↳ B | Gestión de releases | Extensión ALM | Entrega |
@@ -493,6 +495,15 @@ El registro que sigue resume toda la conversación del proyecto. Se han omitido 
 | 47 | «Ya se ha ejecutado y ha creado una PR» | Revisa el PR #9 frente al issue y la constitución; propone que el esqueleto lo cree la tarea 5 | Spec aprobada por revisión normal |
 | 48 | «Merged» | Cierra la tarea 4: bitácora, panel y memoria | Tarea 4 cerrada |
 
+### Fase 8 · Automatización del flujo (6 de octubre)
+
+| # | Petición del autor | Respuesta y acción del modelo | Resultado |
+|---|---|---|---|
+| 49 | «Guarda este punto. ¿El flujo que estamos montando siempre va a requerir que el desarrollador meta un prompt en el devcontainer?» | Guarda el punto exacto de la tarea 5. Explica que no: el agente puede ejecutarse en Actions disparado por eventos, con los riesgos que cambian (contenido no confiable sin supervisión, aislamiento del runner, coste) | Propuesta de agente autónomo |
+| 50 | «¿Cuáles son las tareas 5 a 8?» | Las resume y corrige una afirmación previa: solo la 5 usa el devcontainer; la 6 y la 7 son CI y la 8 ya ejecuta al agente en Actions | Encaje de la propuesta tras la tarea 8 |
+| 51 | «Sin esa extensión, ¿cuál sería el flujo?» | Describe el ciclo completo en 13 pasos: dos prompts manuales (spec e implementación) y el resto automático o por aprobación | Comparación de los dos modos |
+| 52 | «Añade la extensión» | Añade la extensión F entre las tareas 8 y 9 con sus subtareas y controles, y actualiza bitácora, panel y memoria | Plan de 18 tareas |
+
 ## Pruebas realizadas y resultados
 
 ### Pruebas automáticas
@@ -542,10 +553,10 @@ El caso de inyección prueba el diseño en dos niveles. El modelo detectó el in
 
 | Métrica | Valor |
 |---|---|
-| Tareas completadas | 5 de 17 (1, 2, 3, A y 4) |
+| Tareas completadas | 5 de 18 (1, 2, 3, A y 4) |
 | PRs fusionados | 11 (4 en core y 7 en app, uno de ellos del agente), más la documentación |
 | Pruebas automáticas | 57 superadas |
-| Iteraciones registradas con el asistente | 48 |
+| Iteraciones registradas con el asistente | 52 |
 | Problemas de entorno resueltos | 11 |
 | Vulnerabilidades de diseño detectadas antes de explotarse | 2 (aprobación imposible sin identidad propia; herencia de credenciales) |
 

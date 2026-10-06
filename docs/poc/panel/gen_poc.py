@@ -105,6 +105,14 @@ TASKS = [
          subs=[("Revisión automática de PRs contra la spec", "claude", False, []),
                ("Respuesta a @claude solo para colaboradores", "claude", False, []),
                ("Probar con un comentario en un PR", "usuario", False, [])]),
+    dict(id="F", title="Agente autónomo en Actions", phase="Construcción", status="todo",
+         desc="La etiqueta aprobado lanza al agente en Actions para escribir la spec, y el merge de la spec lanza el plan, las tareas y la implementación. Desaparecen los prompts manuales del devcontainer; las aprobaciones humanas no cambian.",
+         prereqs=[("Clave de almagentic-agent como secreto de Actions en app (la misma de la tarea 8)", False)],
+         subs=[("Workflow reutilizable del agente en core: etiqueta aprobado → PR de la spec", "claude", False, []),
+               ("Disparador al fusionar una spec → PR de implementación con Closes #issue", "claude", False, []),
+               ("Solo disparan usuarios con escritura; límite de turnos y de tiempo por ejecución", "claude", False, []),
+               ("Control de la red de salida del runner (equivalente al sandbox)", "claude", False, []),
+               ("Fusionar, actualizar la etiqueta de core y probar con una petición nueva", "usuario", False, [])]),
     dict(id="9", title="Supply chain", phase="Entrega", status="todo",
          desc="SBOM, firma de la imagen y provenance.",
          prereqs=[],
@@ -238,6 +246,9 @@ DETAILS = {
     "4": """**Decisiones**: rutas bajo `/api/v1` (convención de `AGENTS.md`); el criterio "precio al momento" pasa a "tras el despliegue"; el esqueleto de la aplicación lo crea el PR de la tarea 5. Spec Kit se instala desde la etiqueta v1.1.0 de GitHub (PyPI va por detrás) y sus ficheros se versionan en el repo.
 
 **Incidencia**: el sandbox de Claude Code no arrancaba en el devcontainer (`bwrap: No permissions to create a new namespace`). Con `failIfUnavailable` el agente se quedó sin shell y no buscó rodeos. Solución: `--security-opt seccomp=unconfined` en `runArgs` (app#8). Comprobación: `bwrap --ro-bind / / --dev /dev --unshare-user --unshare-net true && echo "sandbox OK"`.""",
+    "F": """**Por qué**: sin esta extensión el desarrollador escribe dos prompts por feature en el devcontainer (spec e implementación). Con ella, el agente arranca con los mismos eventos en los que ya decide un humano: la etiqueta `aprobado` y el merge de la spec. El devcontainer se mantiene como modo interactivo.
+
+**Riesgos y controles**: el agente lee el issue sin una persona delante, así que solo lo disparan usuarios con escritura (como el triage). Usa el token de una hora de la GitHub App, limitado a app y sin permiso sobre workflows. En el runner no hay bubblewrap: el aislamiento lo da la máquina efímera y la red se limita con un control de salida. Cada ejecución tiene límite de turnos y de tiempo.""",
     "10": """**Cómo preparar el cluster**: pasos en el [README de gitops](https://github.com/acbacb77/poc-almagentic-gitops#puesta-en-marcha-una-sola-vez).
 """,
 }

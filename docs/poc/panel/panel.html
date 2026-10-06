@@ -722,6 +722,55 @@ const TASKS = [
   ]
  },
  {
+  "id": "F",
+  "title": "Agente autónomo en Actions",
+  "phase": "Construcción",
+  "status": "todo",
+  "desc": "La etiqueta aprobado lanza al agente en Actions para escribir la spec, y el merge de la spec lanza el plan, las tareas y la implementación. Desaparecen los prompts manuales del devcontainer; las aprobaciones humanas no cambian.",
+  "alm": [
+   "8",
+   "9"
+  ],
+  "prereqs": [
+   [
+    "Clave de almagentic-agent como secreto de Actions en app (la misma de la tarea 8)",
+    false
+   ]
+  ],
+  "subs": [
+   [
+    "Workflow reutilizable del agente en core: etiqueta aprobado → PR de la spec",
+    "claude",
+    false,
+    []
+   ],
+   [
+    "Disparador al fusionar una spec → PR de implementación con Closes #issue",
+    "claude",
+    false,
+    []
+   ],
+   [
+    "Solo disparan usuarios con escritura; límite de turnos y de tiempo por ejecución",
+    "claude",
+    false,
+    []
+   ],
+   [
+    "Control de la red de salida del runner (equivalente al sandbox)",
+    "claude",
+    false,
+    []
+   ],
+   [
+    "Fusionar, actualizar la etiqueta de core y probar con una petición nueva",
+    "usuario",
+    false,
+    []
+   ]
+  ]
+ },
+ {
   "id": "9",
   "title": "Supply chain",
   "phase": "Entrega",

@@ -2,7 +2,7 @@
 
 Registro de todo lo hecho en la POC: decisiones, pasos manuales, PRs y problemas resueltos. Se actualiza al cerrar cada tarea, junto con la [memoria del TFM](../tfm/README.md), que es requisito para cerrar la POC.
 
-**Última actualización:** 4 de octubre de 2026 · **Avance:** 4 de 17 tareas (1, 2, 3 y A)
+**Última actualización:** 6 de octubre de 2026 · **Avance:** 5 de 18 tareas (1, 2, 3, A y 4)
 
 **Cada tarea tiene sus prerrequisitos manuales y sus subtareas en orden.** **Leyenda de responsables:** Usuario 👤 (acción manual) · Claude 🤖 (sesión de trabajo) · Agente (bot `almagentic-agent` en el devcontainer) · Automático ⚙️ (GitHub Actions, Argo CD)
 
@@ -57,6 +57,7 @@ Las tareas con letra son **extensiones ALM**: se añadieron al plan original y s
 | **6** | CI: build, tests y lint | Principal | Pendiente |
 | **7** | Scan de seguridad | Principal | Pendiente |
 | **8** | Agente revisor y respuesta a @claude | Principal | Pendiente |
+| ↳ F | Agente autónomo en Actions | Extensión ALM (entre 8 y 9) | Pendiente |
 | **9** | Supply chain | Principal | Pendiente |
 | **10** | Deploy GitOps con gate humano | Principal | Pendiente |
 | ↳ B | Gestión de releases | Extensión ALM (entre 10 y 11) | Pendiente |
@@ -353,6 +354,36 @@ Revisión automática contra la spec y cambios a petición, solo para usuarios c
 | 8.3 | Probar con un comentario en un PR | Usuario 👤 | ⬜ |  |
 
 _Subtareas previstas: se ajustarán al llegar a la tarea._
+
+---
+
+> ## ↳ Tarea F · Agente autónomo en Actions ⬜
+>
+> **Extensión ALM** · se ejecuta entre la tarea 8 y la 9.
+>
+> La etiqueta aprobado lanza al agente en Actions para escribir la spec, y el merge de la spec lanza el plan, las tareas y la implementación. Desaparecen los prompts manuales del devcontainer; las aprobaciones humanas no cambian.
+>
+> ### Prerrequisitos manuales
+>
+> - ⬜ Clave de almagentic-agent como secreto de Actions en app (la misma de la tarea 8)
+>
+> ### Subtareas
+>
+> | # | Subtarea | Quién | Estado | Enlaces |
+> |---|---|---|---|---|
+> | F.1 | Workflow reutilizable del agente en core: etiqueta aprobado → PR de la spec | Claude 🤖 | ⬜ |  |
+> | F.2 | Disparador al fusionar una spec → PR de implementación con Closes #issue | Claude 🤖 | ⬜ |  |
+> | F.3 | Solo disparan usuarios con escritura; límite de turnos y de tiempo por ejecución | Claude 🤖 | ⬜ |  |
+> | F.4 | Control de la red de salida del runner (equivalente al sandbox) | Claude 🤖 | ⬜ |  |
+> | F.5 | Fusionar, actualizar la etiqueta de core y probar con una petición nueva | Usuario 👤 | ⬜ |  |
+>
+> ### Detalle
+>
+> **Por qué**: sin esta extensión el desarrollador escribe dos prompts por feature en el devcontainer (spec e implementación). Con ella, el agente arranca con los mismos eventos en los que ya decide un humano: la etiqueta `aprobado` y el merge de la spec. El devcontainer se mantiene como modo interactivo.
+>
+> **Riesgos y controles**: el agente lee el issue sin una persona delante, así que solo lo disparan usuarios con escritura (como el triage). Usa el token de una hora de la GitHub App, limitado a app y sin permiso sobre workflows. En el runner no hay bubblewrap: el aislamiento lo da la máquina efímera y la red se limita con un control de salida. Cada ejecución tiene límite de turnos y de tiempo.
+>
+> _Subtareas previstas: se ajustarán al llegar a la tarea._
 
 ---
 
