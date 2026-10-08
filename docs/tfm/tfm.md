@@ -144,11 +144,16 @@ Los tres términos se usan a menudo como sinónimos, aunque designan cosas disti
 
 | Término | Qué designa | Relación con este trabajo |
 |---|---|---|
+| AI-driven SDLC / AI-DLC | Ciclo de desarrollo dirigido por IA con validación humana en cada etapa; AI-DLC es la metodología concreta de AWS [8][9] | La POC aplica sus principios en las fases del SDLC |
 | SDLC agéntico | Los agentes hacen el trabajo de cada fase del desarrollo [6] | Núcleo de la POC |
 | ALM agéntico | El mismo enfoque extendido a todo el ciclo de vida, incluidas demanda, operación y retirada | Alcance completo de la POC (tareas A a E) |
 | ADLC (*Agent Development Lifecycle*) | Ciclo de vida para construir agentes como producto, con *evals* además de tests unitarios [13][14] | Fuera de alcance; se usa en la tarea C para evaluar el harness |
 
 Dicho de forma breve, en el SDLC agéntico los agentes construyen software y en el ADLC el software que se construye son agentes.
+
+La POC lleva estos principios a una implementación real y los amplía en dos direcciones. Cubre las fases del ALM que AI-DLC no trata (demanda, *releases*, mantenimiento y retirada) y añade una capa de gobierno que la metodología describe poco: identidades propias para los agentes, un harness que los contiene y trazabilidad por versión. La figura 2 sitúa cada tarea del plan en una de las tres zonas.
+
+![Figura 2. Qué parte de la POC corresponde al SDLC que cubre AI-DLC y qué parte la amplía hasta el ALM agéntico.](figuras/alcance.png)
 
 ## Herramientas de agentes de código
 
@@ -231,9 +236,9 @@ La solución se reparte en tres repositorios con responsabilidades y permisos di
 | `poc-almagentic-core` | Workflows reutilizables, estándares de agentes, documentación | Solo humanos |
 | `poc-almagentic-gitops` | Estado deseado del cluster (Argo CD) | Un bot abre PRs; un humano aprueba |
 
-La figura 2 sigue un cambio desde que el agente abre el PR hasta que Argo CD lo despliega en *staging*. El responsable aprueba en dos puntos: el merge del código en app y el merge de la promoción en gitops.
+La figura 3 sigue un cambio desde que el agente abre el PR hasta que Argo CD lo despliega en *staging*. El responsable aprueba en dos puntos: el merge del código en app y el merge de la promoción en gitops.
 
-![Figura 2. Flujo de un cambio por los tres repositorios, desde el PR del agente hasta la sincronización de Argo CD.](figuras/flujo-cambio.png)
+![Figura 3. Flujo de un cambio por los tres repositorios, desde el PR del agente hasta la sincronización de Argo CD.](figuras/flujo-cambio.png)
 
 Los controles viven en un repositorio al que el agente no tiene acceso. Los workflows de CI, seguridad y triage están en core y la aplicación los llama por versión (`@v1`), de modo que el agente puede proponer cambios en app pero no puede alterar las comprobaciones que se ejecutan sobre ellos.
 
@@ -289,9 +294,9 @@ Un hallazgo temprano condicionó el diseño: GitHub no permite aprobar un PR pro
 
 ## Tarea 3: el harness del agente
 
-El *harness* es el conjunto de controles que rodean al agente de código. Tiene siete capas, desde las que solo orientan al agente hasta las que impone la plataforma. La figura 3 sigue el camino de una acción: el contexto orienta al agente, los permisos y el hook pueden bloquearla en local, y GitHub aplica la identidad y la protección de la rama cuando la acción llega al repositorio.
+El *harness* es el conjunto de controles que rodean al agente de código. Tiene siete capas, desde las que solo orientan al agente hasta las que impone la plataforma. La figura 4 sigue el camino de una acción: el contexto orienta al agente, los permisos y el hook pueden bloquearla en local, y GitHub aplica la identidad y la protección de la rama cuando la acción llega al repositorio.
 
-![Figura 3. Capas del harness en el camino de una acción del agente. Las capas 3 a 5 actúan en Claude Code y las capas 6 y 7 en GitHub.](figuras/harness.png)
+![Figura 4. Capas del harness en el camino de una acción del agente. Las capas 3 a 5 actúan en Claude Code y las capas 6 y 7 en GitHub.](figuras/harness.png)
 
 | Capa | Dónde | Qué impone | ¿La impone GitHub? |
 |---|---|---|---|
@@ -333,7 +338,7 @@ Las peticiones llegan como issues con una plantilla estructurada que pregunta qu
 
 Una petición es texto escrito por un usuario, así que el triage es la vía de entrada de los ataques de inyección descritos en el capítulo 3. Por eso el diseño separa pensar de actuar:
 
-![Figura 4. Flujo del triage: el modelo propone sin herramientas y un script determinista valida y aplica.](figuras/triage.png)
+![Figura 5. Flujo del triage: el modelo propone sin herramientas y un script determinista valida y aplica.](figuras/triage.png)
 
 | Job | Quién | Permisos | Qué hace |
 |---|---|---|---|
@@ -503,6 +508,8 @@ El registro que sigue resume toda la conversación del proyecto. Se han omitido 
 | 50 | «¿Cuáles son las tareas 5 a 8?» | Las resume y corrige una afirmación previa: solo la 5 usa el devcontainer; la 6 y la 7 son CI y la 8 ya ejecuta al agente en Actions | Encaje de la propuesta tras la tarea 8 |
 | 51 | «Sin esa extensión, ¿cuál sería el flujo?» | Describe el ciclo completo en 13 pasos: dos prompts manuales (spec e implementación) y el resto automático o por aprobación | Comparación de los dos modos |
 | 52 | «Añade la extensión» | Añade la extensión F entre las tareas 8 y 9 con sus subtareas y controles, y actualiza bitácora, panel y memoria | Plan de 18 tareas |
+| 53 | «¿AI-driven SDLC es otra manera de llamar a lo que estamos haciendo, el ALM agéntico?» | Distingue el uso genérico del término y la metodología AI-DLC de AWS, y compara ambos con el SDLC y el ALM agénticos: la POC comparte la validación humana por etapa y amplía el alcance y el gobierno | Posicionamiento del trabajo |
+| 54 | «Es decir, que vamos más allá, de la teoría a la práctica real, no solo en el SDLC de la app sino en la configuración de todo el ALM. Haz un gráfico donde se vea qué partes son del AI-DLC/SDLC y cuáles del ALM que hemos montado.» | Crea la figura 2 con archify, que reparte las tareas en SDLC (AI-DLC), ampliación ALM y gobierno transversal, y añade AI-DLC a la tabla de términos | Figura 2 en el estado del arte |
 
 ## Pruebas realizadas y resultados
 
@@ -556,7 +563,7 @@ El caso de inyección prueba el diseño en dos niveles. El modelo detectó el in
 | Tareas completadas | 5 de 18 (1, 2, 3, A y 4) |
 | PRs fusionados | 11 (4 en core y 7 en app, uno de ellos del agente), más la documentación |
 | Pruebas automáticas | 57 superadas |
-| Iteraciones registradas con el asistente | 52 |
+| Iteraciones registradas con el asistente | 54 |
 | Problemas de entorno resueltos | 11 |
 | Vulnerabilidades de diseño detectadas antes de explotarse | 2 (aprobación imposible sin identidad propia; herencia de credenciales) |
 
