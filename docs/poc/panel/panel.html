@@ -643,31 +643,69 @@ const TASKS = [
   "id": "6",
   "title": "CI: build, tests y lint",
   "phase": "Calidad",
-  "status": "next",
-  "desc": "Workflow reutilizable en core que valida cada PR en una máquina limpia.",
+  "status": "done",
+  "desc": "Workflow reutilizable en core que valida cada PR de app en una máquina limpia (uv.lock exacto, pytest, ruff y mypy). Es un check obligatorio para fusionar en main.",
   "alm": null,
-  "prereqs": [],
+  "prereqs": [
+   [
+    "Login de git con 2FA en WSL (gh auth login + gh auth setup-git) o mover etiquetas desde la web",
+    true
+   ]
+  ],
   "subs": [
    [
-    "Workflow reutilizable de CI en core",
+    "Workflow reutilizable de CI en core y CI propio de core (57 tests)",
     "claude",
-    false,
-    []
+    true,
+    [
+     {
+      "label": "core#8",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/8"
+     }
+    ]
    ],
    [
-    "Llamada al CI desde app",
+    "Llamada al CI desde app (ci / checks)",
     "claude",
-    false,
-    []
+    true,
+    [
+     {
+      "label": "app#11",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/11"
+     }
+    ]
    ],
    [
-    "Fusionar y crear la etiqueta de versión de core",
+    "Fusionar core#8 y mover la etiqueta v1 de core (y crear v1.1.0)",
     "usuario",
-    false,
+    true,
     []
    ],
    [
-    "Marcar el check de CI como obligatorio en el ruleset de app",
+    "Fusionar app#11",
+    "usuario",
+    true,
+    []
+   ],
+   [
+    "Marcar ci / checks como obligatorio en el ruleset de main de app",
+    "usuario",
+    true,
+    []
+   ],
+   [
+    "Probar que un PR con el CI en rojo queda bloqueado",
+    "claude",
+    true,
+    [
+     {
+      "label": "app#12",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/12"
+     }
+    ]
+   ],
+   [
+    "Borrar la rama test/ci-rojo de app (botón Delete branch en app#12)",
     "usuario",
     false,
     []
@@ -678,7 +716,7 @@ const TASKS = [
   "id": "7",
   "title": "Scan de seguridad",
   "phase": "Calidad",
-  "status": "todo",
+  "status": "next",
   "desc": "SAST, dependencias, secretos, configuración del agente y ficheros generados en PRs.",
   "alm": null,
   "prereqs": [],

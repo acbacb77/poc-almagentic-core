@@ -87,14 +87,17 @@ TASKS = [
                ("Abrir el PR como almagentic-agent[bot] con Closes #5", "agente", True, [pr("app", 10)]),
                ("Probar la API a mano y revisar las decisiones del agente", "claude", True, []),
                ("Aprobar y fusionar el PR (cierra el #5)", "usuario", True, [])]),
-    dict(id="6", title="CI: build, tests y lint", phase="Calidad", status="next",
-         desc="Workflow reutilizable en core que valida cada PR en una máquina limpia.",
-         prereqs=[],
-         subs=[("Workflow reutilizable de CI en core", "claude", False, []),
-               ("Llamada al CI desde app", "claude", False, []),
-               ("Fusionar y crear la etiqueta de versión de core", "usuario", False, []),
-               ("Marcar el check de CI como obligatorio en el ruleset de app", "usuario", False, [])]),
-    dict(id="7", title="Scan de seguridad", phase="Calidad", status="todo",
+    dict(id="6", title="CI: build, tests y lint", phase="Calidad", status="done",
+         desc="Workflow reutilizable en core que valida cada PR de app en una máquina limpia (uv.lock exacto, pytest, ruff y mypy). Es un check obligatorio para fusionar en main.",
+         prereqs=[("Login de git con 2FA en WSL (gh auth login + gh auth setup-git) o mover etiquetas desde la web", True)],
+         subs=[("Workflow reutilizable de CI en core y CI propio de core (57 tests)", "claude", True, [pr("core", 8)]),
+               ("Llamada al CI desde app (ci / checks)", "claude", True, [pr("app", 11)]),
+               ("Fusionar core#8 y mover la etiqueta v1 de core (y crear v1.1.0)", "usuario", True, []),
+               ("Fusionar app#11", "usuario", True, []),
+               ("Marcar ci / checks como obligatorio en el ruleset de main de app", "usuario", True, []),
+               ("Probar que un PR con el CI en rojo queda bloqueado", "claude", True, [pr("app", 12)]),
+               ("Borrar la rama test/ci-rojo de app (botón Delete branch en app#12)", "usuario", False, [])]),
+    dict(id="7", title="Scan de seguridad", phase="Calidad", status="next",
          desc="SAST, dependencias, secretos, configuración del agente y ficheros generados en PRs.",
          prereqs=[],
          subs=[("Workflow reutilizable de seguridad en core", "claude", False, []),
@@ -252,6 +255,11 @@ DETAILS = {
 **Pendientes derivados**: `httpx2` (bloqueado por permisos, va a la tarea C); `guard.py` no pasa ruff (arreglar en core); licencias sin contrastar (tarea 7); cabecera `Cache-Control: no-store` opcional (primera prueba de `@claude` en la tarea 8).
 
 **Problema típico**: `start-agent.sh: AGENT_APP_ID: Define AGENT_APP_ID` significa que la terminal no está dentro del contenedor. Reabrir con *Dev Containers: Reopen in Container* y comprobar con `echo "$AGENT_APP_ID"`.""",
+    "6": """**Cómo mover la etiqueta v1 de core** (repo `poc-almagentic-core`). Desde la web: *Releases* → borrar la release `v1` → *Tags* → borrar `v1` → *Draft a new release* con la etiqueta nueva `v1` y destino `main`. Desde WSL, en un clon de core y con `gh auth login` + `gh auth setup-git` hechos: `git fetch origin --tags && git tag -f v1 origin/main && git push -f origin v1`.
+
+**Check obligatorio** (repo `poc-almagentic-app`): *Settings → Rules → Rulesets* → ruleset de `main` → *Require status checks to pass* → *Add checks* → `ci / checks`.
+
+**Problema típico**: una ejecución que falla porque el workflow reutilizable no existe en la etiqueta no se puede relanzar con *Re-run*; hay que hacer un push nuevo a la rama del PR (por ejemplo, un commit vacío).""",
     "F": """**Por qué**: sin esta extensión el desarrollador escribe dos prompts por feature en el devcontainer (spec e implementación). Con ella, el agente arranca con los mismos eventos en los que ya decide un humano: la etiqueta `aprobado` y el merge de la spec. El devcontainer se mantiene como modo interactivo.
 
 **Riesgos y controles**: el agente lee el issue sin una persona delante, así que solo lo disparan usuarios con escritura (como el triage). Usa el token de una hora de la GitHub App, limitado a app y sin permiso sobre workflows. En el runner no hay bubblewrap: el aislamiento lo da la máquina efímera y la red se limita con un control de salida. Cada ejecución tiene límite de turnos y de tiempo.""",
