@@ -25,9 +25,8 @@ jobs:
 ```
 .github/workflows/
   reusable-triage.yml         # agente de triage de peticiones (tarea A)
-  reusable-ci.yml             # tests, lint (ruff) y tipos (mypy) con uv.lock (tarea 6)
   ci.yml                      # tests propios de core: hook y triage
-  reusable-ci.yml             # build, tests, lint (tarea 6)
+  reusable-ci.yml             # tests, lint (ruff) y tipos (mypy) con uv.lock (tarea 6)
   reusable-security.yml       # Semgrep, Trivy, gitleaks (tarea 7)
   reusable-agent-review.yml   # revisor con permisos mínimos (tarea 8)
   reusable-supply-chain.yml   # SBOM, firma, atestación (tarea 9)
