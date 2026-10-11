@@ -2,7 +2,7 @@
 
 Registro de todo lo hecho en la POC: decisiones, pasos manuales, PRs y problemas resueltos. Se actualiza al cerrar cada tarea, junto con la [memoria del TFM](../tfm/README.md), que es requisito para cerrar la POC.
 
-**Última actualización:** 4 de octubre de 2026 · **Avance:** 4 de 17 tareas (1, 2, 3 y A)
+**Última actualización:** 6 de octubre de 2026 · **Avance:** 5 de 18 tareas (1, 2, 3, A y 4)
 
 **Cada tarea tiene sus prerrequisitos manuales y sus subtareas en orden.** **Leyenda de responsables:** Usuario 👤 (acción manual) · Claude 🤖 (sesión de trabajo) · Agente (bot `almagentic-agent` en el devcontainer) · Automático ⚙️ (GitHub Actions, Argo CD)
 
@@ -52,11 +52,12 @@ Las tareas con letra son **extensiones ALM**: se añadieron al plan original y s
 | **2** | Crear repos y entorno aislado | Principal | ✅ Hecha |
 | **3** | Harness del agente | Principal | ✅ Hecha |
 | ↳ A | Entrada de demanda con agente de triage | Extensión ALM (entre 3 y 4) | ✅ Hecha |
-| **4** | Spec de la feature con Spec Kit | Principal | ⏭️ Siguiente |
-| **5** | Implementación por el agente + tests | Principal | Pendiente |
+| **4** | Spec de la feature con Spec Kit | Principal | ✅ Hecha |
+| **5** | Implementación por el agente + tests | Principal | ⏭️ Siguiente |
 | **6** | CI: build, tests y lint | Principal | Pendiente |
 | **7** | Scan de seguridad | Principal | Pendiente |
 | **8** | Agente revisor y respuesta a @claude | Principal | Pendiente |
+| ↳ F | Agente autónomo en Actions | Extensión ALM (entre 8 y 9) | Pendiente |
 | **9** | Supply chain | Principal | Pendiente |
 | **10** | Deploy GitOps con gate humano | Principal | Pendiente |
 | ↳ B | Gestión de releases | Extensión ALM (entre 10 y 11) | Pendiente |
@@ -245,33 +246,38 @@ Repos, protección de main, identidades de los bots y base de Argo CD.
 
 ---
 
-## Tarea 4 · Spec de la feature con Spec Kit ⏭️
+## Tarea 4 · Spec de la feature con Spec Kit ✅
 
-El agente escribe spec, plan y tareas del catálogo de productos a partir del issue aprobado.
+El agente escribe la spec del catálogo de productos con /speckit-specify a partir del issue aprobado; un humano la revisa y la aprueba en un PR propio.
 
 ### Prerrequisitos manuales
 
-- Ninguno nuevo.
+- ✅ Preguntas abiertas del #5 respondidas en un comentario (rutas bajo /api/v1)
+- ✅ Etiqueta aprobado en el #5
+- ✅ Devcontainer reconstruido tras app#8 (sandbox operativo)
 
 ### Subtareas
 
 | # | Subtarea | Quién | Estado | Enlaces |
 |---|---|---|---|---|
-| 4.1 | Responder las preguntas abiertas del #5 | Usuario 👤 | ⬜ | [#5 Catálogo](https://github.com/acbacb77/poc-almagentic-app/issues/5) |
-| 4.2 | Añadir la etiqueta aprobado al #5 | Usuario 👤 | ⬜ |  |
-| 4.3 | Añadir Spec Kit al devcontainer | Claude 🤖 | ⬜ |  |
-| 4.4 | Generar specs/001-catalogo-productos (spec, plan y tareas) | Agente (bot) | ⬜ |  |
-| 4.5 | Revisar y aprobar el PR de la spec | Usuario 👤 | ⬜ |  |
+| 4.1 | Añadir Spec Kit v1.1.0 al repo (skills, plantillas y permisos) | Claude 🤖 | ✅ | [app#7](https://github.com/acbacb77/poc-almagentic-app/pull/7) |
+| 4.2 | Fusionar app#7 | Usuario 👤 | ✅ |  |
+| 4.3 | Arreglar el sandbox del devcontainer (seccomp y user namespaces) | Claude 🤖 | ✅ | [app#8](https://github.com/acbacb77/poc-almagentic-app/pull/8) |
+| 4.4 | Fusionar app#8 y reconstruir el contenedor | Usuario 👤 | ✅ |  |
+| 4.5 | Generar specs/001-catalogo-productos con /speckit-specify | Agente (bot) | ✅ | [app#9](https://github.com/acbacb77/poc-almagentic-app/pull/9) |
+| 4.6 | Revisar, aprobar y fusionar el PR de la spec | Usuario 👤 | ✅ |  |
 
 ### Detalle
 
-**Respuestas propuestas para el #5**: lista fija en el código (5-10 productos); precio en euros con 2 decimales, IVA incluido; sin paginación ni filtros; público; 404 con el formato estándar de FastAPI.
+**Decisiones**: rutas bajo `/api/v1` (convención de `AGENTS.md`); el criterio "precio al momento" pasa a "tras el despliegue"; el esqueleto de la aplicación lo crea el PR de la tarea 5. Spec Kit se instala desde la etiqueta v1.1.0 de GitHub (PyPI va por detrás) y sus ficheros se versionan en el repo.
+
+**Incidencia**: el sandbox de Claude Code no arrancaba en el devcontainer (`bwrap: No permissions to create a new namespace`). Con `failIfUnavailable` el agente se quedó sin shell y no buscó rodeos. Solución: `--security-opt seccomp=unconfined` en `runArgs` (app#8). Comprobación: `bwrap --ro-bind / / --dev /dev --unshare-user --unshare-net true && echo "sandbox OK"`.
 
 ---
 
-## Tarea 5 · Implementación por el agente + tests ⬜
+## Tarea 5 · Implementación por el agente + tests ⏭️
 
-El agente implementa las tareas de la spec en el devcontainer y abre un PR firmado por el bot.
+El agente crea el esqueleto de la aplicación, genera plan y tareas con Spec Kit, implementa el catálogo con tests y abre un PR firmado por el bot.
 
 ### Prerrequisitos manuales
 
@@ -281,12 +287,12 @@ El agente implementa las tareas de la spec en el devcontainer y abre un PR firma
 
 | # | Subtarea | Quién | Estado | Enlaces |
 |---|---|---|---|---|
-| 5.1 | Lanzar el agente sobre la spec aprobada | Usuario 👤 | ⬜ |  |
-| 5.2 | Implementar las tareas con sus tests | Agente (bot) | ⬜ |  |
-| 5.3 | Abrir el PR como almagentic-agent[bot] | Agente (bot) | ⬜ |  |
-| 5.4 | Revisar y aprobar el PR | Usuario 👤 | ⬜ |  |
-
-_Subtareas previstas: se ajustarán al llegar a la tarea._
+| 5.1 | Lanzar el agente sobre la spec aprobada (rama feat/5-catalogo-productos) | Usuario 👤 | ⬜ |  |
+| 5.2 | Generar plan y tareas con /speckit-plan y /speckit-tasks | Agente (bot) | ⬜ |  |
+| 5.3 | Crear el esqueleto (pyproject, src/app/main.py con /health, tests) | Agente (bot) | ⬜ |  |
+| 5.4 | Implementar las tareas con sus tests (/speckit-implement) | Agente (bot) | ⬜ |  |
+| 5.5 | Abrir el PR como almagentic-agent[bot] con Closes #5 | Agente (bot) | ⬜ |  |
+| 5.6 | Revisar y aprobar el PR | Usuario 👤 | ⬜ |  |
 
 ---
 
@@ -324,7 +330,7 @@ SAST, dependencias, secretos, configuración del agente y ficheros generados en 
 | # | Subtarea | Quién | Estado | Enlaces |
 |---|---|---|---|---|
 | 7.1 | Workflow reutilizable de seguridad en core | Claude 🤖 | ⬜ |  |
-| 7.2 | Detectar ficheros generados y cambios en la config del agente | Claude 🤖 | ⬜ |  |
+| 7.2 | Detectar ficheros generados y cambios en la config del agente (incluido .specify/) | Claude 🤖 | ⬜ |  |
 | 7.3 | Fusionar, etiqueta de core y check obligatorio | Usuario 👤 | ⬜ |  |
 
 _Subtareas previstas: se ajustarán al llegar a la tarea._
@@ -348,6 +354,36 @@ Revisión automática contra la spec y cambios a petición, solo para usuarios c
 | 8.3 | Probar con un comentario en un PR | Usuario 👤 | ⬜ |  |
 
 _Subtareas previstas: se ajustarán al llegar a la tarea._
+
+---
+
+> ## ↳ Tarea F · Agente autónomo en Actions ⬜
+>
+> **Extensión ALM** · se ejecuta entre la tarea 8 y la 9.
+>
+> La etiqueta aprobado lanza al agente en Actions para escribir la spec, y el merge de la spec lanza el plan, las tareas y la implementación. Desaparecen los prompts manuales del devcontainer; las aprobaciones humanas no cambian.
+>
+> ### Prerrequisitos manuales
+>
+> - ⬜ Clave de almagentic-agent como secreto de Actions en app (la misma de la tarea 8)
+>
+> ### Subtareas
+>
+> | # | Subtarea | Quién | Estado | Enlaces |
+> |---|---|---|---|---|
+> | F.1 | Workflow reutilizable del agente en core: etiqueta aprobado → PR de la spec | Claude 🤖 | ⬜ |  |
+> | F.2 | Disparador al fusionar una spec → PR de implementación con Closes #issue | Claude 🤖 | ⬜ |  |
+> | F.3 | Solo disparan usuarios con escritura; límite de turnos y de tiempo por ejecución | Claude 🤖 | ⬜ |  |
+> | F.4 | Control de la red de salida del runner (equivalente al sandbox) | Claude 🤖 | ⬜ |  |
+> | F.5 | Fusionar, actualizar la etiqueta de core y probar con una petición nueva | Usuario 👤 | ⬜ |  |
+>
+> ### Detalle
+>
+> **Por qué**: sin esta extensión el desarrollador escribe dos prompts por feature en el devcontainer (spec e implementación). Con ella, el agente arranca con los mismos eventos en los que ya decide un humano: la etiqueta `aprobado` y el merge de la spec. El devcontainer se mantiene como modo interactivo.
+>
+> **Riesgos y controles**: el agente lee el issue sin una persona delante, así que solo lo disparan usuarios con escritura (como el triage). Usa el token de una hora de la GitHub App, limitado a app y sin permiso sobre workflows. En el runner no hay bubblewrap: el aislamiento lo da la máquina efímera y la red se limita con un control de salida. Cada ejecución tiene límite de turnos y de tiempo.
+>
+> _Subtareas previstas: se ajustarán al llegar a la tarea._
 
 ---
 

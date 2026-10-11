@@ -1,0 +1,262 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "AI-DLC / SDLC frente al ALM agéntico de la POC",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "backend": {
+          "label": "Fase del SDLC (AI-DLC)"
+        },
+        "cloud": {
+          "label": "Ampliación ALM de la POC"
+        },
+        "security": {
+          "label": "Gobierno transversal de la POC"
+        }
+      }
+    }
+  },
+  "components": [
+    {
+      "id": "demanda",
+      "type": "cloud",
+      "label": "Demanda y triage",
+      "sublabel": "tarea A",
+      "pos": [
+        40,
+        60
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "spec",
+      "type": "backend",
+      "label": "Inception",
+      "sublabel": "spec con Spec Kit · 4",
+      "pos": [
+        270,
+        60
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "constr",
+      "type": "backend",
+      "label": "Construction",
+      "sublabel": "código, CI, seguridad · 5-8, F",
+      "pos": [
+        270,
+        190
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "entrega",
+      "type": "backend",
+      "label": "Entrega",
+      "sublabel": "supply chain y GitOps · 9, 10",
+      "pos": [
+        270,
+        320
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "oper",
+      "type": "backend",
+      "label": "Operations",
+      "sublabel": "alerta → issue · 11",
+      "pos": [
+        270,
+        450
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "releases",
+      "type": "cloud",
+      "label": "Releases",
+      "sublabel": "versionado · tarea B",
+      "pos": [
+        40,
+        320
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "mant",
+      "type": "cloud",
+      "label": "Mantenimiento",
+      "sublabel": "dependencias · tarea C",
+      "pos": [
+        40,
+        450
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "retirada",
+      "type": "cloud",
+      "label": "Retirada",
+      "sublabel": "fin de la v1 · tarea D",
+      "pos": [
+        40,
+        580
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "ident",
+      "type": "security",
+      "label": "Repos e identidades",
+      "sublabel": "3 repos, GitHub Apps · 1, 2",
+      "pos": [
+        500,
+        60
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "harness",
+      "type": "security",
+      "label": "Harness del agente",
+      "sublabel": "7 capas · tarea 3",
+      "pos": [
+        500,
+        190
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "traza",
+      "type": "security",
+      "label": "Trazabilidad",
+      "sublabel": "informe por versión · E",
+      "pos": [
+        500,
+        450
+      ],
+      "size": [
+        150,
+        56
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "AI-DLC / SDLC",
+      "wraps": [
+        "spec",
+        "constr",
+        "entrega",
+        "oper"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Solo ALM",
+      "wraps": [
+        "demanda",
+        "releases",
+        "mant",
+        "retirada"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "Gobierno",
+      "wraps": [
+        "ident",
+        "harness",
+        "traza"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "demanda-spec",
+      "from": "demanda",
+      "to": "spec",
+      "label": "aprobado"
+    },
+    {
+      "id": "spec-constr",
+      "from": "spec",
+      "to": "constr"
+    },
+    {
+      "id": "constr-entrega",
+      "from": "constr",
+      "to": "entrega"
+    },
+    {
+      "id": "entrega-oper",
+      "from": "entrega",
+      "to": "oper"
+    },
+    {
+      "id": "releases-entrega",
+      "from": "releases",
+      "to": "entrega",
+      "label": "versión"
+    },
+    {
+      "id": "oper-mant",
+      "from": "oper",
+      "to": "mant"
+    },
+    {
+      "id": "mant-retirada",
+      "from": "mant",
+      "to": "retirada"
+    },
+    {
+      "id": "harness-constr",
+      "from": "harness",
+      "to": "constr",
+      "label": "contiene",
+      "variant": "security"
+    },
+    {
+      "id": "oper-traza",
+      "from": "oper",
+      "to": "traza",
+      "label": "evidencias",
+      "variant": "dashed"
+    }
+  ]
+}
