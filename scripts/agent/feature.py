@@ -158,7 +158,11 @@ FOOTER_PR = (
 def pr_text(
     phase: str, issue: int, issue_title: str, output_path: str, spec_dir: str
 ) -> tuple[str, str]:
-    title_text = safe(issue_title, 80)
+    # Sin el prefijo de la plantilla de peticiones ("[Petición] ") y con mayúscula inicial.
+    plain = re.sub(r"^\s*\[[^\]]{1,30}\]\s*", "", str(issue_title or "")) or str(
+        issue_title or ""
+    )
+    title_text = safe(plain[:1].upper() + plain[1:], 80)
     if phase == "spec":
         title = f"spec: {title_text} (#{issue})"
         intro = f"Especificación de la petición #{issue} en `{spec_dir}/`, escrita por el agente con Spec Kit. No incluye código."
