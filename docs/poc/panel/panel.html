@@ -580,45 +580,61 @@ const TASKS = [
   "id": "5",
   "title": "Implementación por el agente + tests",
   "phase": "Construcción",
-  "status": "next",
-  "desc": "El agente crea el esqueleto de la aplicación, genera plan y tareas con Spec Kit, implementa el catálogo con tests y abre un PR firmado por el bot.",
+  "status": "done",
+  "desc": "El agente genera plan y tareas con Spec Kit, crea el esqueleto de la aplicación e implementa el catálogo con 55 tests; un humano lo prueba, lo aprueba y lo fusiona.",
   "alm": null,
-  "prereqs": [],
+  "prereqs": [
+   [
+    "Spec fusionada (app#9) y devcontainer actualizado con git pull",
+    true
+   ]
+  ],
   "subs": [
    [
     "Lanzar el agente sobre la spec aprobada (rama feat/5-catalogo-productos)",
     "usuario",
-    false,
+    true,
     []
    ],
    [
     "Generar plan y tareas con /speckit-plan y /speckit-tasks",
     "agente",
-    false,
+    true,
     []
    ],
    [
     "Crear el esqueleto (pyproject, src/app/main.py con /health, tests)",
     "agente",
-    false,
+    true,
     []
    ],
    [
     "Implementar las tareas con sus tests (/speckit-implement)",
     "agente",
-    false,
+    true,
     []
    ],
    [
     "Abrir el PR como almagentic-agent[bot] con Closes #5",
     "agente",
-    false,
+    true,
+    [
+     {
+      "label": "app#10",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/10"
+     }
+    ]
+   ],
+   [
+    "Probar la API a mano y revisar las decisiones del agente",
+    "claude",
+    true,
     []
    ],
    [
-    "Revisar y aprobar el PR",
+    "Aprobar y fusionar el PR (cierra el #5)",
     "usuario",
-    false,
+    true,
     []
    ]
   ]
@@ -627,7 +643,7 @@ const TASKS = [
   "id": "6",
   "title": "CI: build, tests y lint",
   "phase": "Calidad",
-  "status": "todo",
+  "status": "next",
   "desc": "Workflow reutilizable en core que valida cada PR en una máquina limpia.",
   "alm": null,
   "prereqs": [],
