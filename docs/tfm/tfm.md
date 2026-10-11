@@ -425,9 +425,30 @@ El agente no arrancó la API ni la probó a mano, porque los permisos le impiden
 
 La revisión cubrió esos huecos. El asistente ejecutó tests, ruff y mypy en una copia limpia de la rama, arrancó la API y comprobó cada endpoint: `/health`, el listado, la consulta por id, el 404 y las métricas. El responsable aprobó el PR y, al fusionarlo, el `Closes #5` cerró la petición. La petición del catálogo recorrió así todo el camino, del issue al código fusionado, con tres aprobaciones humanas: la de la petición, la de la spec y la del código.
 
+## Tarea 6: CI como check obligatorio
+
+Los tests, el lint y los tipos ya pasaban en el devcontainer, pero eso solo lo comprueba quien ha escrito el código. La tarea 6 lleva esas comprobaciones a una máquina limpia de GitHub Actions y las convierte en condición para fusionar.
+
+| Pieza | Repositorio | Qué hace |
+|---|---|---|
+| `reusable-ci.yml` | core | Instala exactamente lo que fija `uv.lock` y ejecuta pytest, ruff (lint y formato) y mypy |
+| `ci.yml` | core | Ejecuta en cada PR de core los 57 tests propios del hook y del triage |
+| `ci.yml` | app | Llama a `reusable-ci.yml@v1` en cada PR y en cada push a `main`; el check se llama `ci / checks` |
+| Ruleset de `main` | app | `ci / checks` pasa a ser obligatorio, además de la aprobación de Code Owners |
+
+El workflow de core se escribió con las mismas precauciones que el triage. Las acciones van fijadas por SHA y no por etiqueta, el job solo tiene permiso de lectura y no conserva credenciales, y las entradas llegan a la shell por variables de entorno. El agente no puede cambiar nada de esto: el workflow vive en core y la App del agente no tiene permiso sobre `.github/workflows/` en app.
+
+### Puesta en marcha
+
+Para que app viera el workflow nuevo hubo que mover la etiqueta `v1` de core a la nueva `main`. El responsable se encontró con dos obstáculos. GitHub le pidió activar la verificación en dos pasos y, con ella activa, git ya no aceptaba la contraseña por HTTPS; se resolvió moviendo la etiqueta desde la web (borrar la release y la etiqueta y crearlas de nuevo sobre `main`, junto con una `v1.1.0`). Después, la primera ejecución del CI en app#11 no se podía relanzar, porque había fallado antes de arrancar al no encontrar el workflow en la `v1` antigua; un commit vacío en la rama lanzó una ejecución nueva, que salió en verde.
+
+### Prueba del bloqueo
+
+Para comprobar que el check bloquea de verdad se abrió un PR de prueba (app#12) con un `import` sin usar. El CI terminó en rojo con la anotación de ruff en la línea exacta (`F401 os imported but unused`) y GitHub marcó el PR como bloqueado. El PR se cerró sin fusionar.
+
 ## Tareas pendientes
 
-> Las secciones de las tareas 6 a 12 y de las extensiones B a F se añadirán a medida que se implementen: CI, análisis de seguridad, agente revisor, agente autónomo, cadena de suministro, despliegue GitOps, *releases*, operación, mantenimiento, retirada y trazabilidad.
+> Las secciones de las tareas 7 a 12 y de las extensiones B a F se añadirán a medida que se implementen: análisis de seguridad, agente revisor, agente autónomo, cadena de suministro, despliegue GitOps, *releases*, operación, mantenimiento, retirada y trazabilidad.
 
 # Iteraciones con modelos, pruebas y resultados
 
@@ -549,10 +570,22 @@ El registro que sigue resume toda la conversación del proyecto. Se han omitido 
 |---|---|---|---|
 | 55 | «Continuamos, PR core#6 merged» | Da los pasos para actualizar el devcontainer y el mensaje para el agente, y avisa de qué permisos pedirá (`uv add`, `git push`) | Tarea 5 en marcha |
 | 56 | «¿Cómo puedo reabrir la sesión de VS Code?» | Tres formas de volver al devcontainer y cómo comprobar que se está dentro | Contenedor abierto |
-| 57 | `start-agent.sh: AGENT_APP_ID: Define AGENT_APP_ID` | Verifica que la variable está en `devcontainer.json` y deduce que la terminal estaba fuera del contenedor | Agente arrancado |
+| 57 | `git push` rechazado tras activar 2FA | Iniciar sesión con `gh auth login` y `gh auth setup-git`, o usar un token *fine-grained* como contraseña |
+| No aparece *Re-run all jobs* en un CI fallido | La ejecución falló antes de arrancar (workflow inexistente en la etiqueta); hacer un push nuevo a la rama |
+| `start-agent.sh: AGENT_APP_ID: Define AGENT_APP_ID` | Verifica que la variable está en `devcontainer.json` y deduce que la terminal estaba fuera del contenedor | Agente arrancado |
 | 58 | «Me pregunta si quiero sobrescribir plan.md» | Explica que es la plantilla recién copiada por Spec Kit y el permiso normal de escritura; recomienda permitir ediciones en la sesión, porque el hook y las reglas `deny` siguen activos | Plan generado |
 | 59 | Informe del agente: PR #10 abierto, 55 tests, decisiones y pendientes | Revisa el PR: ningún fichero protegido, tests, lint y tipos en una copia limpia, y la API arrancada endpoint por endpoint. Valora las cuatro decisiones y asigna cada pendiente a una tarea del plan | Recomendación de aprobar |
 | 60 | «Merged» | Cierra la tarea 5: bitácora, panel y memoria | Issue #5 cerrado |
+
+### Fase 10 · CI obligatorio (11 de octubre)
+
+| # | Petición del autor | Respuesta y acción del modelo | Resultado |
+|---|---|---|---|
+| 61 | «Olvídate de la limitación de 45 páginas» | Retira el límite de las notas del proyecto y del README de la memoria; la memoria conserva el registro completo y los pasos reproducibles | Sin límite de extensión |
+| 62 | «Merged» (cierre de la tarea 5) | Abre core#8 (CI reutilizable y CI propio de core, acciones fijadas por SHA, validado con actionlint) y app#11 (llamada al CI) | Tarea 6 preparada |
+| 63 | «Me ha hecho configurar un 2FA y ahora no puedo hacer el push» | Explica por qué falla la contraseña con 2FA y da dos salidas: mover la etiqueta desde la web o iniciar sesión con `gh auth login` | Etiqueta `v1` movida desde la web |
+| 64 | «No me aparece la opción "Re-run all jobs"» | Comprueba que `v1` ya contiene el workflow, deduce que la ejecución falló antes de arrancar y lanza otra con un commit vacío | `ci / checks` en verde |
+| 65 | «Listo. Recuerda especificar en qué repo hay que ejecutar los comandos o las acciones que me indicas» | Lo anota como regla de trabajo. Verifica la regla del ruleset y abre un PR con un error de lint: el CI falla y el merge queda bloqueado | Tarea 6 cerrada |
 
 ## Pruebas realizadas y resultados
 
@@ -562,6 +595,7 @@ El registro que sigue resume toda la conversación del proyecto. Se han omitido 
 |---|---|---|
 | Hook `guard.py` | 45 casos: 21 comandos que deben bloquearse, 10 que deben permitirse, ficheros protegidos, secretos y auditoría | 45/45 superadas |
 | Aplicación: catálogo (`app`) | 55 casos: listado, consulta por id, 404, precio con 2 decimales, orden estable, catálogo mal formado, despliegue de un cambio de precio, observabilidad y `/health` | 55/55 superadas |
+| CI obligatorio (app#12) | PR con un `import` sin usar | CI en rojo y merge bloqueado |
 | Triage (`apply.py`, `build_prompt.py`) | 12 casos: salida estructurada, valores inválidos, etiquetas arbitrarias, referencias falsas, neutralización de texto, sospecha de inyección | 12/12 superadas |
 
 ### Pruebas del harness en el entorno real
@@ -604,14 +638,14 @@ El caso de inyección prueba el diseño en dos niveles. El modelo detectó el in
 
 | Métrica | Valor |
 |---|---|
-| Tareas completadas | 6 de 18 (1, 2, 3, A, 4 y 5) |
-| PRs fusionados | 12 (4 en core y 8 en app, dos de ellos del agente), más la documentación |
+| Tareas completadas | 7 de 18 (1, 2, 3, A, 4, 5 y 6) |
+| PRs fusionados | 14 (5 en core y 9 en app, dos de ellos del agente), más la documentación |
 | Pruebas automáticas | 112 superadas (57 de harness y triage, 55 de la aplicación) |
-| Iteraciones registradas con el asistente | 60 |
-| Problemas de entorno resueltos | 12 |
+| Iteraciones registradas con el asistente | 65 |
+| Problemas de entorno resueltos | 14 |
 | Vulnerabilidades de diseño detectadas antes de explotarse | 2 (aprobación imposible sin identidad propia; herencia de credenciales) |
 
-> Este capítulo se ampliará con las iteraciones y pruebas de las tareas 6 a 12 y B a F.
+> Este capítulo se ampliará con las iteraciones y pruebas de las tareas 7 a 12 y B a F.
 
 # Documentación técnica reproducible
 
@@ -687,7 +721,22 @@ curl -i localhost:8000/api/v1/productos/taza-ceramica
 
 5. Aprobar y fusionar el PR; el issue se cierra solo.
 
-> Los pasos de las tareas 6 a 12 y B a F se añadirán al completarlas.
+### Tarea 6. CI obligatorio
+
+1. En core: añadir `reusable-ci.yml` (y `ci.yml` para sus propios tests) y fusionar.
+2. En core: mover la etiqueta `v1` a la nueva `main`. Desde la web, borrando la release y la etiqueta y creándolas de nuevo sobre `main`; desde un clon con credenciales válidas (con 2FA, `gh auth login` y `gh auth setup-git`):
+
+```
+git fetch origin --tags
+git tag -f v1 origin/main
+git push -f origin v1
+```
+
+3. En app: añadir `.github/workflows/ci.yml` que llame a `reusable-ci.yml@v1` y fusionar cuando `ci / checks` salga en verde.
+4. En app: *Settings → Rules → Rulesets* → ruleset de `main` → *Require status checks to pass* → añadir `ci / checks`.
+5. En app: abrir un PR con un error de lint y comprobar que queda bloqueado.
+
+> Los pasos de las tareas 7 a 12 y B a F se añadirán al completarlas.
 
 ## Estructura de los repositorios
 

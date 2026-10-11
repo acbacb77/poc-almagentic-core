@@ -2,7 +2,7 @@
 
 Registro de todo lo hecho en la POC: decisiones, pasos manuales, PRs y problemas resueltos. Se actualiza al cerrar cada tarea, junto con la [memoria del TFM](../tfm/README.md), que es requisito para cerrar la POC.
 
-**Última actualización:** 11 de octubre de 2026 · **Avance:** 6 de 18 tareas (1, 2, 3, A, 4 y 5)
+**Última actualización:** 11 de octubre de 2026 · **Avance:** 7 de 18 tareas (1, 2, 3, A, 4, 5 y 6)
 
 **Cada tarea tiene sus prerrequisitos manuales y sus subtareas en orden.** **Leyenda de responsables:** Usuario 👤 (acción manual) · Claude 🤖 (sesión de trabajo) · Agente (bot `almagentic-agent` en el devcontainer) · Automático ⚙️ (GitHub Actions, Argo CD)
 
@@ -54,8 +54,8 @@ Las tareas con letra son **extensiones ALM**: se añadieron al plan original y s
 | ↳ A | Entrada de demanda con agente de triage | Extensión ALM (entre 3 y 4) | ✅ Hecha |
 | **4** | Spec de la feature con Spec Kit | Principal | ✅ Hecha |
 | **5** | Implementación por el agente + tests | Principal | ✅ Hecha |
-| **6** | CI: build, tests y lint | Principal | ⏭️ Siguiente |
-| **7** | Scan de seguridad | Principal | Pendiente |
+| **6** | CI: build, tests y lint | Principal | ✅ Hecha |
+| **7** | Scan de seguridad | Principal | ⏭️ Siguiente |
 | **8** | Agente revisor y respuesta a @claude | Principal | Pendiente |
 | ↳ F | Agente autónomo en Actions | Extensión ALM (entre 8 y 9) | Pendiente |
 | **9** | Supply chain | Principal | Pendiente |
@@ -305,26 +305,37 @@ El agente genera plan y tareas con Spec Kit, crea el esqueleto de la aplicación
 
 ---
 
-## Tarea 6 · CI: build, tests y lint ⏭️
+## Tarea 6 · CI: build, tests y lint ✅
 
-Workflow reutilizable en core que valida cada PR en una máquina limpia.
+Workflow reutilizable en core que valida cada PR de app en una máquina limpia (uv.lock exacto, pytest, ruff y mypy). Es un check obligatorio para fusionar en main.
 
 ### Prerrequisitos manuales
 
-- Ninguno nuevo.
+- ✅ Login de git con 2FA en WSL (gh auth login + gh auth setup-git) o mover etiquetas desde la web
 
 ### Subtareas
 
 | # | Subtarea | Quién | Estado | Enlaces |
 |---|---|---|---|---|
-| 6.1 | Workflow reutilizable de CI en core | Claude 🤖 | ⬜ |  |
-| 6.2 | Llamada al CI desde app | Claude 🤖 | ⬜ |  |
-| 6.3 | Fusionar y crear la etiqueta de versión de core | Usuario 👤 | ⬜ |  |
-| 6.4 | Marcar el check de CI como obligatorio en el ruleset de app | Usuario 👤 | ⬜ |  |
+| 6.1 | Workflow reutilizable de CI en core y CI propio de core (57 tests) | Claude 🤖 | ✅ | [core#8](https://github.com/acbacb77/poc-almagentic-core/pull/8) |
+| 6.2 | Llamada al CI desde app (ci / checks) | Claude 🤖 | ✅ | [app#11](https://github.com/acbacb77/poc-almagentic-app/pull/11) |
+| 6.3 | Fusionar core#8 y mover la etiqueta v1 de core (y crear v1.1.0) | Usuario 👤 | ✅ |  |
+| 6.4 | Fusionar app#11 | Usuario 👤 | ✅ |  |
+| 6.5 | Marcar ci / checks como obligatorio en el ruleset de main de app | Usuario 👤 | ✅ |  |
+| 6.6 | Probar que un PR con el CI en rojo queda bloqueado | Claude 🤖 | ✅ | [app#12](https://github.com/acbacb77/poc-almagentic-app/pull/12) |
+| 6.7 | Borrar la rama test/ci-rojo de app (botón Delete branch en app#12) | Usuario 👤 | ⬜ |  |
+
+### Detalle
+
+**Cómo mover la etiqueta v1 de core** (repo `poc-almagentic-core`). Desde la web: *Releases* → borrar la release `v1` → *Tags* → borrar `v1` → *Draft a new release* con la etiqueta nueva `v1` y destino `main`. Desde WSL, en un clon de core y con `gh auth login` + `gh auth setup-git` hechos: `git fetch origin --tags && git tag -f v1 origin/main && git push -f origin v1`.
+
+**Check obligatorio** (repo `poc-almagentic-app`): *Settings → Rules → Rulesets* → ruleset de `main` → *Require status checks to pass* → *Add checks* → `ci / checks`.
+
+**Problema típico**: una ejecución que falla porque el workflow reutilizable no existe en la etiqueta no se puede relanzar con *Re-run*; hay que hacer un push nuevo a la rama del PR (por ejemplo, un commit vacío).
 
 ---
 
-## Tarea 7 · Scan de seguridad ⬜
+## Tarea 7 · Scan de seguridad ⏭️
 
 SAST, dependencias, secretos, configuración del agente y ficheros generados en PRs.
 
@@ -339,8 +350,6 @@ SAST, dependencias, secretos, configuración del agente y ficheros generados en 
 | 7.1 | Workflow reutilizable de seguridad en core | Claude 🤖 | ⬜ |  |
 | 7.2 | Detectar ficheros generados y cambios en la config del agente (incluido .specify/) | Claude 🤖 | ⬜ |  |
 | 7.3 | Fusionar, etiqueta de core y check obligatorio | Usuario 👤 | ⬜ |  |
-
-_Subtareas previstas: se ajustarán al llegar a la tarea._
 
 ---
 
