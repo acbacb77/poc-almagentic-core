@@ -77,16 +77,17 @@ TASKS = [
                ("Fusionar app#8 y reconstruir el contenedor", "usuario", True, []),
                ("Generar specs/001-catalogo-productos con /speckit-specify", "agente", True, [pr("app", 9)]),
                ("Revisar, aprobar y fusionar el PR de la spec", "usuario", True, [])]),
-    dict(id="5", title="Implementación por el agente + tests", phase="Construcción", status="next",
-         desc="El agente crea el esqueleto de la aplicación, genera plan y tareas con Spec Kit, implementa el catálogo con tests y abre un PR firmado por el bot.",
-         prereqs=[],
-         subs=[("Lanzar el agente sobre la spec aprobada (rama feat/5-catalogo-productos)", "usuario", False, []),
-               ("Generar plan y tareas con /speckit-plan y /speckit-tasks", "agente", False, []),
-               ("Crear el esqueleto (pyproject, src/app/main.py con /health, tests)", "agente", False, []),
-               ("Implementar las tareas con sus tests (/speckit-implement)", "agente", False, []),
-               ("Abrir el PR como almagentic-agent[bot] con Closes #5", "agente", False, []),
-               ("Revisar y aprobar el PR", "usuario", False, [])]),
-    dict(id="6", title="CI: build, tests y lint", phase="Calidad", status="todo",
+    dict(id="5", title="Implementación por el agente + tests", phase="Construcción", status="done",
+         desc="El agente genera plan y tareas con Spec Kit, crea el esqueleto de la aplicación e implementa el catálogo con 55 tests; un humano lo prueba, lo aprueba y lo fusiona.",
+         prereqs=[("Spec fusionada (app#9) y devcontainer actualizado con git pull", True)],
+         subs=[("Lanzar el agente sobre la spec aprobada (rama feat/5-catalogo-productos)", "usuario", True, []),
+               ("Generar plan y tareas con /speckit-plan y /speckit-tasks", "agente", True, []),
+               ("Crear el esqueleto (pyproject, src/app/main.py con /health, tests)", "agente", True, []),
+               ("Implementar las tareas con sus tests (/speckit-implement)", "agente", True, []),
+               ("Abrir el PR como almagentic-agent[bot] con Closes #5", "agente", True, [pr("app", 10)]),
+               ("Probar la API a mano y revisar las decisiones del agente", "claude", True, []),
+               ("Aprobar y fusionar el PR (cierra el #5)", "usuario", True, [])]),
+    dict(id="6", title="CI: build, tests y lint", phase="Calidad", status="next",
          desc="Workflow reutilizable en core que valida cada PR en una máquina limpia.",
          prereqs=[],
          subs=[("Workflow reutilizable de CI en core", "claude", False, []),
@@ -246,6 +247,11 @@ DETAILS = {
     "4": """**Decisiones**: rutas bajo `/api/v1` (convención de `AGENTS.md`); el criterio "precio al momento" pasa a "tras el despliegue"; el esqueleto de la aplicación lo crea el PR de la tarea 5. Spec Kit se instala desde la etiqueta v1.1.0 de GitHub (PyPI va por detrás) y sus ficheros se versionan en el repo.
 
 **Incidencia**: el sandbox de Claude Code no arrancaba en el devcontainer (`bwrap: No permissions to create a new namespace`). Con `failIfUnavailable` el agente se quedó sin shell y no buscó rodeos. Solución: `--security-opt seccomp=unconfined` en `runArgs` (app#8). Comprobación: `bwrap --ro-bind / / --dev /dev --unshare-user --unshare-net true && echo "sandbox OK"`.""",
+    "5": """**Decisiones del agente aprobadas**: precio serializado como texto (`"4.95"`) para garantizar 2 decimales; identificador como slug; `GET /metrics` público hasta la tarea 10; rutas con barras reciben el 404 genérico de FastAPI.
+
+**Pendientes derivados**: `httpx2` (bloqueado por permisos, va a la tarea C); `guard.py` no pasa ruff (arreglar en core); licencias sin contrastar (tarea 7); cabecera `Cache-Control: no-store` opcional (primera prueba de `@claude` en la tarea 8).
+
+**Problema típico**: `start-agent.sh: AGENT_APP_ID: Define AGENT_APP_ID` significa que la terminal no está dentro del contenedor. Reabrir con *Dev Containers: Reopen in Container* y comprobar con `echo "$AGENT_APP_ID"`.""",
     "F": """**Por qué**: sin esta extensión el desarrollador escribe dos prompts por feature en el devcontainer (spec e implementación). Con ella, el agente arranca con los mismos eventos en los que ya decide un humano: la etiqueta `aprobado` y el merge de la spec. El devcontainer se mantiene como modo interactivo.
 
 **Riesgos y controles**: el agente lee el issue sin una persona delante, así que solo lo disparan usuarios con escritura (como el triage). Usa el token de una hora de la GitHub App, limitado a app y sin permiso sobre workflows. En el runner no hay bubblewrap: el aislamiento lo da la máquina efímera y la red se limita con un control de salida. Cada ejecución tiene límite de turnos y de tiempo.""",

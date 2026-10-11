@@ -2,7 +2,7 @@
 
 Registro de todo lo hecho en la POC: decisiones, pasos manuales, PRs y problemas resueltos. Se actualiza al cerrar cada tarea, junto con la [memoria del TFM](../tfm/README.md), que es requisito para cerrar la POC.
 
-**Última actualización:** 6 de octubre de 2026 · **Avance:** 5 de 18 tareas (1, 2, 3, A y 4)
+**Última actualización:** 11 de octubre de 2026 · **Avance:** 6 de 18 tareas (1, 2, 3, A, 4 y 5)
 
 **Cada tarea tiene sus prerrequisitos manuales y sus subtareas en orden.** **Leyenda de responsables:** Usuario 👤 (acción manual) · Claude 🤖 (sesión de trabajo) · Agente (bot `almagentic-agent` en el devcontainer) · Automático ⚙️ (GitHub Actions, Argo CD)
 
@@ -53,8 +53,8 @@ Las tareas con letra son **extensiones ALM**: se añadieron al plan original y s
 | **3** | Harness del agente | Principal | ✅ Hecha |
 | ↳ A | Entrada de demanda con agente de triage | Extensión ALM (entre 3 y 4) | ✅ Hecha |
 | **4** | Spec de la feature con Spec Kit | Principal | ✅ Hecha |
-| **5** | Implementación por el agente + tests | Principal | ⏭️ Siguiente |
-| **6** | CI: build, tests y lint | Principal | Pendiente |
+| **5** | Implementación por el agente + tests | Principal | ✅ Hecha |
+| **6** | CI: build, tests y lint | Principal | ⏭️ Siguiente |
 | **7** | Scan de seguridad | Principal | Pendiente |
 | **8** | Agente revisor y respuesta a @claude | Principal | Pendiente |
 | ↳ F | Agente autónomo en Actions | Extensión ALM (entre 8 y 9) | Pendiente |
@@ -275,28 +275,37 @@ El agente escribe la spec del catálogo de productos con /speckit-specify a part
 
 ---
 
-## Tarea 5 · Implementación por el agente + tests ⏭️
+## Tarea 5 · Implementación por el agente + tests ✅
 
-El agente crea el esqueleto de la aplicación, genera plan y tareas con Spec Kit, implementa el catálogo con tests y abre un PR firmado por el bot.
+El agente genera plan y tareas con Spec Kit, crea el esqueleto de la aplicación e implementa el catálogo con 55 tests; un humano lo prueba, lo aprueba y lo fusiona.
 
 ### Prerrequisitos manuales
 
-- Ninguno nuevo.
+- ✅ Spec fusionada (app#9) y devcontainer actualizado con git pull
 
 ### Subtareas
 
 | # | Subtarea | Quién | Estado | Enlaces |
 |---|---|---|---|---|
-| 5.1 | Lanzar el agente sobre la spec aprobada (rama feat/5-catalogo-productos) | Usuario 👤 | ⬜ |  |
-| 5.2 | Generar plan y tareas con /speckit-plan y /speckit-tasks | Agente (bot) | ⬜ |  |
-| 5.3 | Crear el esqueleto (pyproject, src/app/main.py con /health, tests) | Agente (bot) | ⬜ |  |
-| 5.4 | Implementar las tareas con sus tests (/speckit-implement) | Agente (bot) | ⬜ |  |
-| 5.5 | Abrir el PR como almagentic-agent[bot] con Closes #5 | Agente (bot) | ⬜ |  |
-| 5.6 | Revisar y aprobar el PR | Usuario 👤 | ⬜ |  |
+| 5.1 | Lanzar el agente sobre la spec aprobada (rama feat/5-catalogo-productos) | Usuario 👤 | ✅ |  |
+| 5.2 | Generar plan y tareas con /speckit-plan y /speckit-tasks | Agente (bot) | ✅ |  |
+| 5.3 | Crear el esqueleto (pyproject, src/app/main.py con /health, tests) | Agente (bot) | ✅ |  |
+| 5.4 | Implementar las tareas con sus tests (/speckit-implement) | Agente (bot) | ✅ |  |
+| 5.5 | Abrir el PR como almagentic-agent[bot] con Closes #5 | Agente (bot) | ✅ | [app#10](https://github.com/acbacb77/poc-almagentic-app/pull/10) |
+| 5.6 | Probar la API a mano y revisar las decisiones del agente | Claude 🤖 | ✅ |  |
+| 5.7 | Aprobar y fusionar el PR (cierra el #5) | Usuario 👤 | ✅ |  |
+
+### Detalle
+
+**Decisiones del agente aprobadas**: precio serializado como texto (`"4.95"`) para garantizar 2 decimales; identificador como slug; `GET /metrics` público hasta la tarea 10; rutas con barras reciben el 404 genérico de FastAPI.
+
+**Pendientes derivados**: `httpx2` (bloqueado por permisos, va a la tarea C); `guard.py` no pasa ruff (arreglar en core); licencias sin contrastar (tarea 7); cabecera `Cache-Control: no-store` opcional (primera prueba de `@claude` en la tarea 8).
+
+**Problema típico**: `start-agent.sh: AGENT_APP_ID: Define AGENT_APP_ID` significa que la terminal no está dentro del contenedor. Reabrir con *Dev Containers: Reopen in Container* y comprobar con `echo "$AGENT_APP_ID"`.
 
 ---
 
-## Tarea 6 · CI: build, tests y lint ⬜
+## Tarea 6 · CI: build, tests y lint ⏭️
 
 Workflow reutilizable en core que valida cada PR en una máquina limpia.
 
@@ -312,8 +321,6 @@ Workflow reutilizable en core que valida cada PR en una máquina limpia.
 | 6.2 | Llamada al CI desde app | Claude 🤖 | ⬜ |  |
 | 6.3 | Fusionar y crear la etiqueta de versión de core | Usuario 👤 | ⬜ |  |
 | 6.4 | Marcar el check de CI como obligatorio en el ruleset de app | Usuario 👤 | ⬜ |  |
-
-_Subtareas previstas: se ajustarán al llegar a la tarea._
 
 ---
 

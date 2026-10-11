@@ -393,9 +393,41 @@ Con el sandbox operativo, el agente leyó el issue, creó la rama, ejecutó `/sp
 
 El PR también señaló que el repositorio aún no tenía la aplicación base. El responsable decidió que la cree el PR de implementación de la tarea 5, aprobó la spec y la fusionó. Fue la primera vez que el flujo previsto se cumplió entero: el autor del PR era `almagentic-agent[bot]` y el responsable pudo aprobarlo con su cuenta, sin *bypass*.
 
+## Tarea 5: implementación por el agente
+
+Con la spec fusionada, el responsable pidió al agente el segundo paso del flujo: plan, tareas e implementación en la rama `feat/5-catalogo-productos`, incluido el esqueleto de la aplicación que aún no existía. El agente encadenó `/speckit-plan`, `/speckit-tasks` y `/speckit-implement` y abrió el PR #10 con seis commits:
+
+| Commit | Contenido |
+|---|---|
+| Plan y tareas | `plan.md`, `research.md`, `data-model.md`, `contracts/openapi.yaml`, `quickstart.md` y `tasks.md` |
+| Esqueleto | `pyproject.toml` con `uv`, `src/app/main.py` con `GET /health` y su test |
+| Validación del catálogo | Modelo Pydantic que rechaza ids repetidos, precios sin 2 decimales y catálogos fuera de 5 a 10 productos; la aplicación no arranca con un catálogo mal formado |
+| API | `GET /api/v1/productos` y `GET /api/v1/productos/{id}` |
+| Observabilidad | Logs JSON y métricas Prometheus por plantilla de ruta, sin URLs ni datos del cliente |
+| Cierre de tareas | `tasks.md` con las tareas marcadas |
+
+El PR enlaza cada criterio de aceptación de la spec con los tests que lo cubren (55 en total) y justifica cada dependencia con su alternativa y su licencia. Tests, ruff y mypy en modo estricto pasaban en local.
+
+### Decisiones del agente
+
+La spec dejaba algunas decisiones al plan. El agente las tomó, las razonó en `research.md` y las listó en el PR para que el responsable las revisara antes de fusionar:
+
+| Decisión | Motivo | Resolución |
+|---|---|---|
+| Precio serializado como texto (`"4.95"`) | Un número JSON no conserva los 2 decimales (`4.50` sale como `4.5`) | Aceptada |
+| Identificador como *slug* de texto | La spec lo trataba como valor opaco; cualquier valor desconocido da 404 y nunca 422 | Aceptada |
+| `GET /metrics` público | El anexo de la constitución exige métricas por endpoint | Aceptada; se restringirá al cluster en la tarea 10 |
+| Rutas con barras reciben el 404 genérico de FastAPI | Ya no son un identificador; la respuesta sigue sin revelar nada | Aceptada |
+
+### Lo que el agente no pudo hacer
+
+El agente no arrancó la API ni la probó a mano, porque los permisos le impiden usar `curl`, y dejó esa tarea sin marcar. Tampoco pudo cambiar `httpx` por `httpx2`, porque el control de permisos bloqueó el cambio de dependencia. Además, excluyó `.claude/` y `.specify/` del lint, porque `guard.py` no pasa ruff y el agente no puede modificarlo. Lo dejó todo anotado como pendiente en el PR, sin buscar rodeos.
+
+La revisión cubrió esos huecos. El asistente ejecutó tests, ruff y mypy en una copia limpia de la rama, arrancó la API y comprobó cada endpoint: `/health`, el listado, la consulta por id, el 404 y las métricas. El responsable aprobó el PR y, al fusionarlo, el `Closes #5` cerró la petición. La petición del catálogo recorrió así todo el camino, del issue al código fusionado, con tres aprobaciones humanas: la de la petición, la de la spec y la del código.
+
 ## Tareas pendientes
 
-> Las secciones de las tareas 5 a 12 y de las extensiones B a E se añadirán a medida que se implementen: implementación por el agente, CI, análisis de seguridad, agente revisor, cadena de suministro, despliegue GitOps, *releases*, operación, mantenimiento, retirada y trazabilidad.
+> Las secciones de las tareas 6 a 12 y de las extensiones B a F se añadirán a medida que se implementen: CI, análisis de seguridad, agente revisor, agente autónomo, cadena de suministro, despliegue GitOps, *releases*, operación, mantenimiento, retirada y trazabilidad.
 
 # Iteraciones con modelos, pruebas y resultados
 
@@ -511,6 +543,17 @@ El registro que sigue resume toda la conversación del proyecto. Se han omitido 
 | 53 | «¿AI-driven SDLC es otra manera de llamar a lo que estamos haciendo, el ALM agéntico?» | Distingue el uso genérico del término y la metodología AI-DLC de AWS, y compara ambos con el SDLC y el ALM agénticos: la POC comparte la validación humana por etapa y amplía el alcance y el gobierno | Posicionamiento del trabajo |
 | 54 | «Es decir, que vamos más allá, de la teoría a la práctica real, no solo en el SDLC de la app sino en la configuración de todo el ALM. Haz un gráfico donde se vea qué partes son del AI-DLC/SDLC y cuáles del ALM que hemos montado.» | Crea la figura 2 con archify, que reparte las tareas en SDLC (AI-DLC), ampliación ALM y gobierno transversal, y añade AI-DLC a la tabla de términos | Figura 2 en el estado del arte |
 
+### Fase 9 · Implementación por el agente (11 de octubre)
+
+| # | Petición del autor | Respuesta y acción del modelo | Resultado |
+|---|---|---|---|
+| 55 | «Continuamos, PR core#6 merged» | Da los pasos para actualizar el devcontainer y el mensaje para el agente, y avisa de qué permisos pedirá (`uv add`, `git push`) | Tarea 5 en marcha |
+| 56 | «¿Cómo puedo reabrir la sesión de VS Code?» | Tres formas de volver al devcontainer y cómo comprobar que se está dentro | Contenedor abierto |
+| 57 | `start-agent.sh: AGENT_APP_ID: Define AGENT_APP_ID` | Verifica que la variable está en `devcontainer.json` y deduce que la terminal estaba fuera del contenedor | Agente arrancado |
+| 58 | «Me pregunta si quiero sobrescribir plan.md» | Explica que es la plantilla recién copiada por Spec Kit y el permiso normal de escritura; recomienda permitir ediciones en la sesión, porque el hook y las reglas `deny` siguen activos | Plan generado |
+| 59 | Informe del agente: PR #10 abierto, 55 tests, decisiones y pendientes | Revisa el PR: ningún fichero protegido, tests, lint y tipos en una copia limpia, y la API arrancada endpoint por endpoint. Valora las cuatro decisiones y asigna cada pendiente a una tarea del plan | Recomendación de aprobar |
+| 60 | «Merged» | Cierra la tarea 5: bitácora, panel y memoria | Issue #5 cerrado |
+
 ## Pruebas realizadas y resultados
 
 ### Pruebas automáticas
@@ -518,6 +561,7 @@ El registro que sigue resume toda la conversación del proyecto. Se han omitido 
 | Componente | Pruebas | Resultado |
 |---|---|---|
 | Hook `guard.py` | 45 casos: 21 comandos que deben bloquearse, 10 que deben permitirse, ficheros protegidos, secretos y auditoría | 45/45 superadas |
+| Aplicación: catálogo (`app`) | 55 casos: listado, consulta por id, 404, precio con 2 decimales, orden estable, catálogo mal formado, despliegue de un cambio de precio, observabilidad y `/health` | 55/55 superadas |
 | Triage (`apply.py`, `build_prompt.py`) | 12 casos: salida estructurada, valores inválidos, etiquetas arbitrarias, referencias falsas, neutralización de texto, sospecha de inyección | 12/12 superadas |
 
 ### Pruebas del harness en el entorno real
@@ -560,14 +604,14 @@ El caso de inyección prueba el diseño en dos niveles. El modelo detectó el in
 
 | Métrica | Valor |
 |---|---|
-| Tareas completadas | 5 de 18 (1, 2, 3, A y 4) |
-| PRs fusionados | 11 (4 en core y 7 en app, uno de ellos del agente), más la documentación |
-| Pruebas automáticas | 57 superadas |
-| Iteraciones registradas con el asistente | 54 |
-| Problemas de entorno resueltos | 11 |
+| Tareas completadas | 6 de 18 (1, 2, 3, A, 4 y 5) |
+| PRs fusionados | 12 (4 en core y 8 en app, dos de ellos del agente), más la documentación |
+| Pruebas automáticas | 112 superadas (57 de harness y triage, 55 de la aplicación) |
+| Iteraciones registradas con el asistente | 60 |
+| Problemas de entorno resueltos | 12 |
 | Vulnerabilidades de diseño detectadas antes de explotarse | 2 (aprobación imposible sin identidad propia; herencia de credenciales) |
 
-> Este capítulo se ampliará con las iteraciones y pruebas de las tareas 5 a 12 y B a E.
+> Este capítulo se ampliará con las iteraciones y pruebas de las tareas 6 a 12 y B a F.
 
 # Documentación técnica reproducible
 
@@ -628,7 +672,22 @@ bwrap --ro-bind / / --dev /dev --unshare-user --unshare-net true && echo "sandbo
 4. Arrancar el agente y pedirle que lea el issue, cree `spec/<issue>-<slug>`, ejecute `/speckit-specify` y abra el PR solo con la spec.
 5. Revisar la spec frente al issue y aprobar el PR con la cuenta del responsable.
 
-> Los pasos de las tareas 5 a 12 y B a E se añadirán al completarlas.
+### Tarea 5. Implementación
+
+1. En el devcontainer, actualizar `main` con `git switch main && git pull` y arrancar el agente con `.devcontainer/start-agent.sh`.
+2. Pedirle el paso 2 del flujo de `AGENTS.md` para el issue: rama `feat/<issue>-<slug>`, `/speckit-plan`, `/speckit-tasks` y `/speckit-implement`, con tests, ruff y mypy en verde y un PR con `Closes #<issue>`.
+3. Aprobar las escrituras de ficheros, `uv add` (revisando cada dependencia) y `git push`.
+4. Revisar el PR en una copia limpia y probar la API:
+
+```
+uv sync --frozen && uv run pytest -q && uv run ruff check . && uv run mypy src
+uv run uvicorn app.main:app --app-dir src --port 8000
+curl -i localhost:8000/api/v1/productos/taza-ceramica
+```
+
+5. Aprobar y fusionar el PR; el issue se cierra solo.
+
+> Los pasos de las tareas 6 a 12 y B a F se añadirán al completarlas.
 
 ## Estructura de los repositorios
 
@@ -663,6 +722,7 @@ poc-almagentic-gitops/
 | Triage con `is_error: true` y coste 0 | Token inválido; regenerarlo y validarlo |
 | No se ven los artefactos de Actions | Están en la página *Summary* de la ejecución |
 | `bwrap: No permissions to create a new namespace` | Añadir `--security-opt seccomp=unconfined` a `runArgs` y reconstruir el contenedor |
+| `start-agent.sh: AGENT_APP_ID: Define AGENT_APP_ID` | La terminal está fuera del contenedor: *Dev Containers: Reopen in Container* y comprobar con `echo "$AGENT_APP_ID"` |
 
 # Conclusiones y trabajo futuro
 
