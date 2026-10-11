@@ -707,7 +707,7 @@ const TASKS = [
    [
     "Borrar la rama test/ci-rojo de app (botón Delete branch en app#12)",
     "usuario",
-    false,
+    true,
     []
    ]
   ]
@@ -780,7 +780,7 @@ const TASKS = [
    [
     "Borrar las ramas de prueba de app (Delete branch en app#12 y app#14)",
     "usuario",
-    false,
+    true,
     []
    ]
   ]
@@ -789,32 +789,96 @@ const TASKS = [
   "id": "8",
   "title": "Agente revisor y respuesta a @claude",
   "phase": "Calidad",
-  "status": "next",
-  "desc": "Revisión automática contra la spec y cambios a petición, solo para usuarios con escritura.",
+  "status": "done",
+  "desc": "Un revisor sin herramientas comenta cada PR contra la spec, y un comentario @claude de un colaborador lanza al agente de código en Actions, que sube su cambio al PR como almagentic-agent[bot].",
   "alm": null,
   "prereqs": [
    [
-    "Clave de almagentic-agent como secreto de Actions en app",
-    false
+    "Secreto AGENT_APP_PRIVATE_KEY (clave de almagentic-agent) en Actions de app",
+    true
+   ],
+   [
+    "CLAUDE_CODE_OAUTH_TOKEN en Actions de app (ya existía, de la extensión A)",
+    true
    ]
   ],
   "subs": [
    [
-    "Revisión automática de PRs contra la spec",
+    "Workflows reutilizables en core: revisión (pensar/actuar) y respuesta a @claude (parche validado y subido por un script)",
     "claude",
-    false,
-    []
+    true,
+    [
+     {
+      "label": "core#12",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/12"
+     }
+    ]
    ],
    [
-    "Respuesta a @claude solo para colaboradores",
+    "Scripts de prompt, validación y publicación con 16 tests",
     "claude",
-    false,
-    []
+    true,
+    [
+     {
+      "label": "core#12",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/12"
+     }
+    ]
    ],
    [
-    "Probar con un comentario en un PR",
+    "Llamadas desde app: agent-review y agent-respond",
+    "claude",
+    true,
+    [
+     {
+      "label": "app#15",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/15"
+     }
+    ]
+   ],
+   [
+    "Fusionar core#12, mover v1 de core (y crear v1.3.0), fusionar app#15",
     "usuario",
-    false,
+    true,
+    []
+   ],
+   [
+    "PR de prueba con un test que falla (Cache-Control: no-store, FR-009)",
+    "claude",
+    true,
+    [
+     {
+      "label": "app#16",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/16"
+     }
+    ]
+   ],
+   [
+    "Comentar @claude en el PR de prueba",
+    "usuario",
+    true,
+    [
+     {
+      "label": "app#16",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/16"
+     }
+    ]
+   ],
+   [
+    "Comprobar commit del bot, checks en verde, revisión y que el bot no se dispara a sí mismo",
+    "claude",
+    true,
+    [
+     {
+      "label": "app#16",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/16"
+     }
+    ]
+   ],
+   [
+    "Fusionar app#16",
+    "usuario",
+    true,
     []
    ]
   ]
@@ -823,7 +887,7 @@ const TASKS = [
   "id": "F",
   "title": "Agente autónomo en Actions",
   "phase": "Construcción",
-  "status": "todo",
+  "status": "next",
   "desc": "La etiqueta aprobado lanza al agente en Actions para escribir la spec, y el merge de la spec lanza el plan, las tareas y la implementación. Desaparecen los prompts manuales del devcontainer; las aprobaciones humanas no cambian.",
   "alm": [
    "8",
@@ -832,7 +896,7 @@ const TASKS = [
   "prereqs": [
    [
     "Clave de almagentic-agent como secreto de Actions en app (la misma de la tarea 8)",
-    false
+    true
    ]
   ],
   "subs": [

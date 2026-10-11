@@ -96,7 +96,7 @@ TASKS = [
                ("Fusionar app#11", "usuario", True, []),
                ("Marcar ci / checks como obligatorio en el ruleset de main de app", "usuario", True, []),
                ("Probar que un PR con el CI en rojo queda bloqueado", "claude", True, [pr("app", 12)]),
-               ("Borrar la rama test/ci-rojo de app (botón Delete branch en app#12)", "usuario", False, [])]),
+               ("Borrar la rama test/ci-rojo de app (botón Delete branch en app#12)", "usuario", True, [])]),
     dict(id="7", title="Scan de seguridad", phase="Calidad", status="done",
          desc="Workflow reutilizable en core con cuatro escaneos (bandit, pip-audit y licencias, gitleaks y cambios del agente en lo que lo gobierna) y un check resumen obligatorio.",
          prereqs=[],
@@ -106,16 +106,22 @@ TASKS = [
                ("Fusionar core#10, mover v1 de core, fusionar app#13", "usuario", True, []),
                ("Marcar security / result como obligatorio en el ruleset de main de app", "usuario", True, []),
                ("Probar que un PR con un .pyc queda bloqueado", "claude", True, [pr("app", 14)]),
-               ("Borrar las ramas de prueba de app (Delete branch en app#12 y app#14)", "usuario", False, [])]),
-    dict(id="8", title="Agente revisor y respuesta a @claude", phase="Calidad", status="next",
-         desc="Revisión automática contra la spec y cambios a petición, solo para usuarios con escritura.",
-         prereqs=[("Clave de almagentic-agent como secreto de Actions en app", False)],
-         subs=[("Revisión automática de PRs contra la spec", "claude", False, []),
-               ("Respuesta a @claude solo para colaboradores", "claude", False, []),
-               ("Probar con un comentario en un PR", "usuario", False, [])]),
-    dict(id="F", title="Agente autónomo en Actions", phase="Construcción", status="todo",
+               ("Borrar las ramas de prueba de app (Delete branch en app#12 y app#14)", "usuario", True, [])]),
+    dict(id="8", title="Agente revisor y respuesta a @claude", phase="Calidad", status="done",
+         desc="Un revisor sin herramientas comenta cada PR contra la spec, y un comentario @claude de un colaborador lanza al agente de código en Actions, que sube su cambio al PR como almagentic-agent[bot].",
+         prereqs=[("Secreto AGENT_APP_PRIVATE_KEY (clave de almagentic-agent) en Actions de app", True),
+                  ("CLAUDE_CODE_OAUTH_TOKEN en Actions de app (ya existía, de la extensión A)", True)],
+         subs=[("Workflows reutilizables en core: revisión (pensar/actuar) y respuesta a @claude (parche validado y subido por un script)", "claude", True, [pr("core", 12)]),
+               ("Scripts de prompt, validación y publicación con 16 tests", "claude", True, [pr("core", 12)]),
+               ("Llamadas desde app: agent-review y agent-respond", "claude", True, [pr("app", 15)]),
+               ("Fusionar core#12, mover v1 de core (y crear v1.3.0), fusionar app#15", "usuario", True, []),
+               ("PR de prueba con un test que falla (Cache-Control: no-store, FR-009)", "claude", True, [pr("app", 16)]),
+               ("Comentar @claude en el PR de prueba", "usuario", True, [pr("app", 16)]),
+               ("Comprobar commit del bot, checks en verde, revisión y que el bot no se dispara a sí mismo", "claude", True, [pr("app", 16)]),
+               ("Fusionar app#16", "usuario", True, [])]),
+    dict(id="F", title="Agente autónomo en Actions", phase="Construcción", status="next",
          desc="La etiqueta aprobado lanza al agente en Actions para escribir la spec, y el merge de la spec lanza el plan, las tareas y la implementación. Desaparecen los prompts manuales del devcontainer; las aprobaciones humanas no cambian.",
-         prereqs=[("Clave de almagentic-agent como secreto de Actions en app (la misma de la tarea 8)", False)],
+         prereqs=[("Clave de almagentic-agent como secreto de Actions en app (la misma de la tarea 8)", True)],
          subs=[("Workflow reutilizable del agente en core: etiqueta aprobado → PR de la spec", "claude", False, []),
                ("Disparador al fusionar una spec → PR de implementación con Closes #issue", "claude", False, []),
                ("Solo disparan usuarios con escritura; límite de turnos y de tiempo por ejecución", "claude", False, []),
@@ -269,6 +275,13 @@ DETAILS = {
 **Bandit y no Semgrep**: las reglas de Semgrep se descargan en cada ejecución; las de bandit van en la versión fijada y el resultado es reproducible.
 
 **Hallazgo**: `governance` habría marcado app#10, donde el agente creó `[tool.ruff]` excluyendo `.claude/` y `.specify/`. Desde ahora ese cambio lo hace una persona.""",
+    "8": """**Dos workflows** (repo `poc-almagentic-core`). `reusable-agent-review.yml`: el job `analyze` ejecuta Claude sin herramientas (`--tools ""`) desde una carpeta vacía y con salida JSON validada por esquema; el job `publish` (sin modelo) publica la revisión con `github.token` como comentario, nunca como aprobación. `reusable-agent-respond.yml`: el job `work` ejecuta Claude Code en la copia de app con el harness y el sandbox, sin token de GitHub, y empaqueta el cambio como parche; el job `publish` aplica el parche, pasa `check_pr_files.py`, hace el commit como `almagentic-agent[bot]` con un token de una hora y lo sube a la rama del PR.
+
+**Quién puede disparar**: la revisión, PRs del mismo repo, no borrador, de colaboradores o del bot. La respuesta, comentarios con `@claude` de OWNER, MEMBER o COLLABORATOR; nunca PRs de forks ni ramas `main`.
+
+**Prueba** (app#16): un test exigía `Cache-Control: no-store`. El comentario `@claude haz que pasen los tests de test_cache.py` produjo en ~75 s un commit del bot con un middleware y el ajuste de un test antiguo que contradecía FR-009; CI, seguridad y revisor pasaron, y el comentario del propio bot no volvió a lanzar al agente.
+
+**Problema típico**: si `@claude` no hace nada, comprueba que `agent-respond.yml` ya está en `main` de app (el evento `issue_comment` solo lee los workflows de la rama por defecto).""",
     "F": """**Por qué**: sin esta extensión el desarrollador escribe dos prompts por feature en el devcontainer (spec e implementación). Con ella, el agente arranca con los mismos eventos en los que ya decide un humano: la etiqueta `aprobado` y el merge de la spec. El devcontainer se mantiene como modo interactivo.
 
 **Riesgos y controles**: el agente lee el issue sin una persona delante, así que solo lo disparan usuarios con escritura (como el triage). Usa el token de una hora de la GitHub App, limitado a app y sin permiso sobre workflows. En el runner no hay bubblewrap: el aislamiento lo da la máquina efímera y la red se limita con un control de salida. Cada ejecución tiene límite de turnos y de tiempo.""",

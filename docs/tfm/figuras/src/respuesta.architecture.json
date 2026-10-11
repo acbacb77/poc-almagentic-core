@@ -1,0 +1,274 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Respuesta a @claude: el modelo cambia, un script publica",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "external": {
+          "label": "Persona o entrada"
+        },
+        "backend": {
+          "label": "Agente o proceso"
+        },
+        "security": {
+          "label": "Control o aprobación"
+        },
+        "frontend": {
+          "label": "Artefacto en GitHub"
+        },
+        "database": {
+          "label": "Estado en git"
+        },
+        "messagebus": {
+          "label": "Bot de promoción"
+        },
+        "cloud": {
+          "label": "Clúster"
+        }
+      }
+    }
+  },
+  "components": [
+    {
+      "id": "comentario",
+      "type": "external",
+      "label": "@claude",
+      "sublabel": "comentario en el PR",
+      "pos": [
+        40,
+        50
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "prompt",
+      "type": "backend",
+      "label": "respond_prompt",
+      "sublabel": "marca el texto como datos",
+      "pos": [
+        40,
+        190
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "agente",
+      "type": "backend",
+      "label": "Claude Code",
+      "sublabel": "harness y sandbox",
+      "pos": [
+        260,
+        190
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "parche",
+      "type": "frontend",
+      "label": "Parche",
+      "sublabel": "sin token de GitHub",
+      "pos": [
+        480,
+        190
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "publica",
+      "type": "security",
+      "label": "Script publish",
+      "sublabel": "aplica y revisa ficheros",
+      "pos": [
+        480,
+        330
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "commit",
+      "type": "frontend",
+      "label": "Commit del bot",
+      "sublabel": "token de 1 hora",
+      "pos": [
+        260,
+        330
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "rechazo",
+      "type": "security",
+      "label": "Comentario",
+      "sublabel": "sin push",
+      "pos": [
+        480,
+        470
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "checks",
+      "type": "security",
+      "label": "Checks del PR",
+      "sublabel": "CI, seguridad, revisor",
+      "pos": [
+        260,
+        470
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "merge",
+      "type": "security",
+      "label": "Merge",
+      "sublabel": "decide el responsable",
+      "pos": [
+        40,
+        470
+      ],
+      "size": [
+        140,
+        56
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Colaborador",
+      "wraps": [
+        "comentario"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Job work",
+      "wraps": [
+        "prompt",
+        "agente",
+        "parche"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Job publish",
+      "wraps": [
+        "publica",
+        "commit"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "Fallo seguro",
+      "wraps": [
+        "rechazo"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Plataforma",
+      "wraps": [
+        "checks"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Responsable",
+      "wraps": [
+        "merge"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "c-p",
+      "from": "comentario",
+      "to": "prompt",
+      "label": "OWNER o colaborador",
+      "labelAt": [
+        110,
+        148
+      ]
+    },
+    {
+      "id": "p-a",
+      "from": "prompt",
+      "to": "agente"
+    },
+    {
+      "id": "a-pa",
+      "from": "agente",
+      "to": "parche",
+      "label": "git diff"
+    },
+    {
+      "id": "pa-pu",
+      "from": "parche",
+      "to": "publica",
+      "label": "artefacto",
+      "labelAt": [
+        550,
+        288
+      ]
+    },
+    {
+      "id": "pu-co",
+      "from": "publica",
+      "to": "commit",
+      "label": "todo correcto"
+    },
+    {
+      "id": "pu-re",
+      "from": "publica",
+      "to": "rechazo",
+      "label": "protegido o error",
+      "variant": "security",
+      "labelAt": [
+        550,
+        428
+      ]
+    },
+    {
+      "id": "co-ch",
+      "from": "commit",
+      "to": "checks",
+      "label": "push a la rama",
+      "labelAt": [
+        330,
+        428
+      ]
+    },
+    {
+      "id": "ch-me",
+      "from": "checks",
+      "to": "merge"
+    }
+  ]
+}

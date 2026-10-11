@@ -2,7 +2,7 @@
 
 Los agentes de IA actuales planifican, escriben código, ejecutan herramientas y abren *pull requests*. Con ellos, el ingeniero deja de ejecutar cada fase del ciclo de vida del software y pasa a definir la intención y a supervisar y validar el trabajo de los agentes. Se gana velocidad, pero aparecen riesgos nuevos. Un agente con permisos de escritura que lee texto no confiable (issues, comentarios, páginas web) puede ser manipulado mediante *prompt injection*, heredar las credenciales de una persona o modificar los controles que deberían vigilarlo.
 
-Este Trabajo Fin de Máster diseña y construye una prueba de concepto (POC) de ALM agéntico: un ciclo de vida de aplicaciones completo, desde que entra una petición hasta que se retira una versión de la API, en el que agentes basados en modelos de lenguaje (Claude) hacen el trabajo y las personas conservan las decisiones importantes. La solución tiene cuatro piezas. Hay tres repositorios con responsabilidades separadas (aplicación, plataforma y GitOps) y dos identidades no humanas de mínimo privilegio (GitHub Apps con tokens de una hora). El agente de código trabaja dentro de un *harness* de siete capas de defensa. Y el triage sigue un patrón que separa pensar de actuar: el modelo propone sin herramientas ni permisos, y un script determinista valida la propuesta y la aplica.
+Este Trabajo Fin de Máster diseña y construye una prueba de concepto (POC) de ALM agéntico: un ciclo de vida de aplicaciones completo, desde que entra una petición hasta que se retira una versión de la API, en el que agentes basados en modelos de lenguaje (Claude) hacen el trabajo y las personas conservan las decisiones importantes. La solución tiene cuatro piezas. Hay tres repositorios con responsabilidades separadas (aplicación, plataforma y GitOps) y dos identidades no humanas de mínimo privilegio (GitHub Apps con tokens de una hora). El agente de código trabaja dentro de un *harness* de siete capas de defensa. Y el triage sigue un patrón que separa pensar de actuar: el modelo propone sin herramientas ni permisos, y un script determinista valida la propuesta y la aplica. El mismo patrón se usa en los PRs, donde un segundo agente revisa cada cambio contra la especificación y un colaborador puede pedir correcciones al agente de código con un comentario `@claude`.
 
 El documento recoge el problema, el estado del arte, las decisiones de diseño con sus alternativas, la implementación, el registro completo de iteraciones con los modelos y los resultados de las pruebas. Entre esas pruebas hay un intento de *prompt injection* que el sistema detecta y neutraliza. La documentación técnica permite reproducir la POC desde cero.
 
@@ -466,21 +466,75 @@ El escaneo `governance` cubre lo que ningún escáner genérico sabe: qué fiche
 
 Como en la tarea 6, se abrió un PR de prueba (app#14), esta vez con un fichero `.pyc` dentro de `__pycache__`. El escaneo `governance` falló con la anotación «fichero generado: no debe versionarse», `security / result` quedó en rojo y GitHub bloqueó el merge. Los demás escaneos y el CI salieron en verde, lo que confirma que cada comprobación falla solo por lo suyo.
 
+## Tarea 8: agente revisor y respuesta a @claude
+
+Después de las tareas 6 y 7, cada PR pasa dos comprobaciones deterministas. La tarea 8 lleva el modelo al propio PR de dos formas. Un revisor contrasta el cambio con la spec, y un agente de código atiende lo que un colaborador le pide escribiendo `@claude` en la conversación. Los dos siguen el patrón del triage: el modelo produce un resultado y un script sin modelo decide si se publica.
+
+| Pieza | Repositorio | Qué hace |
+|---|---|---|
+| `reusable-agent-review.yml` | core | `analyze`: Claude sin herramientas, ejecutado desde una carpeta vacía, lee el diff y la spec y devuelve un JSON con esquema. `publish`: un script lo valida y lo publica como comentario de revisión |
+| `reusable-agent-respond.yml` | core | `work`: Claude Code trabaja en la rama del PR con el *harness* y el sandbox del repo, sin token de GitHub, y entrega un parche. `publish`: un script aplica el parche, lo revisa y lo sube como `almagentic-agent[bot]` |
+| `scripts/agent/` y `prompts/` | core | Construcción de los prompts, validación de las salidas y textos de respuesta, con 16 tests |
+| `agent-review.yml` y `agent-respond.yml` | app | Llaman a los anteriores con `@v1` y deciden quién puede lanzarlos |
+
+### Revisor
+
+El revisor recibe el título y la descripción del PR, las specs que toca (o todas, si no toca ninguna), la lista de ficheros y el diff sin `uv.lock`, todo marcado como dato no confiable. Devuelve un veredicto (cumple, cambios sugeridos o no cumple), un resumen, la cobertura de cada criterio de la spec, hallazgos con fichero y línea y un indicador de sospecha de inyección. El script descarta los hallazgos sobre ficheros que el PR no toca, neutraliza menciones y HTML y publica la revisión como comentario. No aprueba ni bloquea: esa decisión sigue siendo de una persona.
+
+Solo revisa PRs del mismo repositorio, que no estén en borrador y cuyo autor sea colaborador o el bot del agente. Un PR desde un fork no puede gastar la suscripción del modelo.
+
+### Respuesta a @claude
+
+![Figura 6. Respuesta a @claude: el agente cambia el código sin acceso a GitHub y un script decide si el cambio se sube.](figuras/respuesta.png)
+
+El workflow de app se lanza con cada comentario, pero solo continúa si el comentario está en un PR, contiene `@claude` y lo escribe alguien con rol OWNER, MEMBER o COLLABORATOR. El workflow de core añade dos negativas más: no trabaja en PRs de forks ni en las ramas `main` o `master`.
+
+El job `work` reproduce en el runner el entorno del devcontainer. Instala bubblewrap para el sandbox y ejecuta Claude Code dentro de la copia de app, de modo que carga `CLAUDE.md`, los permisos y el hook. Acepta ediciones, tiene un máximo de turnos y no recibe ningún token de GitHub. Lo que cambia sale del job como un parche.
+
+El job `publish` no ejecuta ningún modelo. Pide un token de una hora de la GitHub App, comprueba que la rama no ha cambiado mientras el agente trabajaba, aplica el parche, hace el commit como `almagentic-agent[bot]` y pasa `check_pr_files.py` sobre ese commit. Si el agente ha tocado algo que lo gobierna o ha dejado un fichero generado, no sube nada y lo explica en un comentario. Si todo está en orden, sube el commit y publica el resumen del agente.
+
+El push se hace con el token de la App y no con el del workflow por un motivo práctico: GitHub no lanza workflows por los push hechos con el token del propio workflow, así que el cambio del agente se quedaría sin CI. Con la App, el commit del agente pasa por las mismas comprobaciones que el de una persona.
+
+### Puesta en marcha
+
+Hizo falta un segundo secreto en app, `AGENT_APP_PRIVATE_KEY`, con el contenido de la clave del agente que el devcontainer ya montaba desde el equipo del responsable. Después se fusionó core#12 y se movió la etiqueta `v1` desde la web, junto con una nueva `v1.3.0`. La primera ejecución del revisor en app#15 había fallado al arrancar porque `v1` todavía no tenía el workflow, y un commit vacío lanzó otra.
+
+Esa fue la primera revisión real, hecha sobre los workflows que llaman al propio revisor. Sugirió dos cambios. Señaló que se usa la etiqueta móvil `@v1` en un workflow que recibe secretos; es un compromiso aceptado en la POC que se resolverá fijando por SHA en la tarea B. También pidió excluir los PRs de forks en la respuesta a `@claude`. El workflow de core ya lo hace, pero el revisor solo veía el diff de app.
+
+### Prueba de extremo a extremo
+
+Para probar `@claude` se eligió un cambio pequeño y verificable. FR-009 pide que la API no cachee respuestas, y la implementación de la tarea 5 no lo declaraba. Se abrió app#16 con un test que exige `Cache-Control: no-store` en el listado, en la consulta por id y en el 404, y que por tanto fallaba. El responsable escribió en el PR «@claude haz que pasen los tests de test_cache.py».
+
+| Momento | Qué pasó |
+|---|---|
+| 0 s | Comentario del responsable; arranca `agent-respond` |
+| 73 s | Commit `chore(agent): cambio pedido en el PR #16` de `almagentic-agent[bot]` y comentario con el resumen del agente |
+| 74 s | El comentario del bot lanza `agent-respond`, que se salta porque no lo escribe un colaborador ni contiene `@claude` |
+| 115 s | CI, seguridad y revisor terminan en verde sobre el commit del agente |
+
+El cambio del agente tiene dos partes. Añade un middleware que pone `no-store` en todas las respuestas bajo `/api/` sin tocar `/health` ni `/metrics`. Además modifica un test de la tarea 5 que exigía lo contrario, que no hubiera cabecera `cache-control`: lo renombra, le hace exigir `no-store` y lo cuenta en su comentario. Pasó los 58 tests, ruff y mypy. Como `uv run` falló dentro del sandbox por una caché de solo lectura, usó directamente el entorno virtual del proyecto, y también lo dijo.
+
+El revisor comentó el commit del agente con cuatro hallazgos. La descripción del PR ya no correspondía al diff, y se corrigió. El cambio de un test existente no se mencionaba. El prefijo `/api/` es más amplio que el catálogo, y el test depende de un producto concreto del catálogo real; estos dos quedan como mejora. Después el responsable fusionó app#16.
+
+La prueba enseña algo que no se había visto en las tareas anteriores: el agente trabaja sin que nadie abra el devcontainer, su cambio queda asociado a su identidad, pasa las mismas comprobaciones que el de una persona y otro modelo lo revisa antes de que alguien decida. También deja una advertencia. Para que su cambio pasara, el agente modificó un test existente. Esta vez tenía motivo y lo declaró, y el revisor lo señaló, pero es el tipo de cambio que una persona tiene que mirar. Por último, el commit aparece como *Unverified* porque no lleva firma criptográfica; la tarea 9 valorará firmarlo.
+
 ## Tareas pendientes
 
-> Las secciones de las tareas 8 a 12 y de las extensiones B a F se añadirán a medida que se implementen: agente revisor, agente autónomo, cadena de suministro, despliegue GitOps, *releases*, operación, mantenimiento, retirada y trazabilidad.
+> Las secciones de las tareas 9 a 12 y de las extensiones B a F se añadirán a medida que se implementen: agente autónomo, cadena de suministro, despliegue GitOps, *releases*, operación, mantenimiento, retirada y trazabilidad.
 
 # Iteraciones con modelos, pruebas y resultados
 
 ## Metodología de trabajo con los modelos
 
-La POC usa modelos de lenguaje en tres papeles:
+La POC usa modelos de lenguaje en cinco papeles:
 
 | Rol | Modelo y herramienta | Dónde se ejecuta | Permisos |
 |---|---|---|---|
 | Asistente de diseño e implementación | Claude (sesión de trabajo con herramientas) | Entorno en la nube con acceso a los repos | Subir ramas y abrir PRs; no puede fusionar, crear *tags* ni configurar la protección |
 | Agente de código | Claude Code | Devcontainer local | GitHub App `almagentic-agent` + *harness* |
 | Agente de triage | Claude Code en modo no interactivo, modelo *sonnet* | GitHub Actions | Sin herramientas; solo lectura |
+| Agente revisor | Claude Code en modo no interactivo, modelo *sonnet* | GitHub Actions | Sin herramientas; un script publica el comentario |
+| Agente de código en el PR | Claude Code, modelo *sonnet* | GitHub Actions | *Harness* y sandbox, sin token; un script sube el cambio con la App del agente |
 
 El trabajo con el asistente siguió siempre el mismo ciclo. El autor plantea una pregunta o tarea; el modelo investiga (documentación oficial y fuentes web) y propone o implementa mediante un PR; el autor revisa y aprueba o corrige, y el modelo incorpora la corrección. Varias correcciones del autor encontraron problemas que el modelo no había visto: un fichero generado dentro de un PR, problemas de diseño en la documentación y fallos del entorno local, que el modelo no podía observar.
 
@@ -616,6 +670,15 @@ El registro que sigue resume toda la conversación del proyecto. Se han omitido 
 | 68 | «Listo. Por otra parte, hay otros checks que parecen interesantes: Require code scanning results» | Verifica la regla del ruleset y prueba el bloqueo con un `.pyc` (app#14). Explica qué añadiría CodeQL frente a bandit y cómo activarlo | Tarea 7 comprobada |
 | 69 | «Ya lo haré más adelante; de momento no lo pongas como tarea» | No lo añade al plan; queda solo como posible mejora | Tarea 7 cerrada |
 
+### Fase 12 · Agente revisor y @claude (11 y 12 de octubre)
+
+| # | Petición del autor | Respuesta y acción del modelo | Resultado |
+|---|---|---|---|
+| 70 | «Dime dónde estaba guardado el .pem del devcontainer; al final lo guardamos en una ruta de Windows» | Con core#12 y app#15 preparados, la respuesta a `@claude` necesita la clave del agente como secreto de Actions. Recuerda la carpeta del agente en el perfil de Windows y explica cómo copiar su contenido al secreto desde la web sin pegarlo en la conversación | Secreto `AGENT_APP_PRIVATE_KEY` creado |
+| 71 | «Secret creado, continuamos» | Pide fusionar core#12 y mover `v1` desde la web, creando `v1.3.0` | core#12 fusionado |
+| 72 | «Movido el tag» | Comprueba que `v1` apunta a la nueva `main`, relanza app#15 con un commit vacío y resume la primera revisión real. Abre app#16 con el test de FR-009 y corrige una línea demasiado larga que habría hecho fallar el lint por otro motivo | Revisor operativo; PR de prueba listo |
+| 73 | «Sí, lo ha hecho correctamente» (tras fusionar app#15 y comentar `@claude` en app#16) | Verifica el commit del bot, los checks, la revisión y que el bot no se relanza a sí mismo. Corrige la descripción del PR según el revisor y cierra la tarea | Tarea 8 cerrada |
+
 ## Pruebas realizadas y resultados
 
 ### Pruebas automáticas
@@ -623,10 +686,12 @@ El registro que sigue resume toda la conversación del proyecto. Se han omitido 
 | Componente | Pruebas | Resultado |
 |---|---|---|
 | Hook `guard.py` | 45 casos: 21 comandos que deben bloquearse, 10 que deben permitirse, ficheros protegidos, secretos y auditoría | 45/45 superadas |
-| Aplicación: catálogo (`app`) | 55 casos: listado, consulta por id, 404, precio con 2 decimales, orden estable, catálogo mal formado, despliegue de un cambio de precio, observabilidad y `/health` | 55/55 superadas |
+| Aplicación: catálogo (`app`) | 58 casos: listado, consulta por id, 404, precio con 2 decimales, orden estable, catálogo mal formado, despliegue de un cambio de precio, observabilidad, `/health` y `Cache-Control: no-store` | 58/58 superadas |
 | CI obligatorio (app#12) | PR con un `import` sin usar | CI en rojo y merge bloqueado |
 | Gobierno de PRs (`check_pr_files.py`) | 21 casos: ficheros generados, ficheros protegidos según el autor, cambios de dependencias permitidos y configuración de comprobaciones bloqueada | 21/21 superadas |
 | Escaneo de seguridad obligatorio (app#14) | PR con un `.pyc` en `__pycache__` | `governance` en rojo y merge bloqueado |
+| Revisor y respuesta (`scripts/agent`) | 16 casos: publicación y fallo seguro de la revisión, hallazgos fuera del PR, orden por severidad, neutralización, sospecha de inyección, separación de instrucción y datos en los prompts e informes de respuesta | 16/16 superadas |
+| Respuesta a `@claude` (app#16) | PR con tres tests de FR-009 que fallan y un comentario `@claude` | Commit del bot en 73 s, checks en verde, revisión publicada y sin bucle del bot |
 | Triage (`apply.py`, `build_prompt.py`) | 12 casos: salida estructurada, valores inválidos, etiquetas arbitrarias, referencias falsas, neutralización de texto, sospecha de inyección | 12/12 superadas |
 
 ### Pruebas del harness en el entorno real
@@ -664,19 +729,21 @@ El caso de inyección prueba el diseño en dos niveles. El modelo detectó el in
 | Error 401 en el triage | Token mal copiado | Validar antes de guardar | Los metadatos de la respuesta (coste 0) bastan para el diagnóstico |
 | Rutas `/v1` en la respuesta al issue | Error del asistente al redactarla | Corregir el comentario a `/api/v1` | Las respuestas a una petición deben contrastarse con `AGENTS.md` |
 | Sandbox sin *user namespaces* | Perfil seccomp por defecto de Docker | `seccomp=unconfined` en el devcontainer | Una capa sin probar en ejecución real puede estar rota; el fallo seguro lo hizo visible |
+| `uv run` falla al agente en Actions | La caché de uv del runner es de solo lectura dentro del sandbox | El agente usó el entorno virtual; queda pendiente dar una caché escribible | El sandbox también limita al agente en el runner, y el agente declaró cómo lo resolvió |
+| Test antiguo contrario al requisito | La tarea 5 interpretó FR-009 como no enviar cabeceras de caché | El agente cambió el test y lo explicó; el revisor lo señaló | Un agente puede modificar tests existentes para que su cambio pase, y una persona tiene que verlo |
 
 ## Métricas del proceso
 
 | Métrica | Valor |
 |---|---|
-| Tareas completadas | 8 de 18 (1, 2, 3, A, 4, 5, 6 y 7) |
-| PRs fusionados | 16 (6 en core y 10 en app, dos de ellos del agente), más la documentación |
-| Pruebas automáticas | 133 superadas (57 de harness y triage, 21 de gobierno de PRs, 55 de la aplicación) |
-| Iteraciones registradas con el asistente | 69 |
-| Problemas de entorno resueltos | 14 |
+| Tareas completadas | 9 de 18 (1, 2, 3, A, 4, 5, 6, 7 y 8) |
+| PRs fusionados | 19 (7 en core y 12 en app; dos abiertos por el agente y uno con un commit suyo pedido con `@claude`), más la documentación |
+| Pruebas automáticas | 152 superadas (57 de harness y triage, 21 de gobierno de PRs, 16 de los agentes revisor y de respuesta, 58 de la aplicación) |
+| Iteraciones registradas con el asistente | 73 |
+| Problemas de entorno resueltos | 15 |
 | Vulnerabilidades de diseño detectadas antes de explotarse | 2 (aprobación imposible sin identidad propia; herencia de credenciales) |
 
-> Este capítulo se ampliará con las iteraciones y pruebas de las tareas 8 a 12 y B a F.
+> Este capítulo se ampliará con las iteraciones y pruebas de las tareas 9 a 12 y B a F.
 
 # Documentación técnica reproducible
 
@@ -784,7 +851,20 @@ uv run --with pip-licenses==5.5.5 pip-licenses --partial-match --allow-only "MIT
 python3 ../poc-almagentic-core/scripts/security/check_pr_files.py origin/main HEAD
 ```
 
-> Los pasos de las tareas 8 a 12 y B a F se añadirán al completarlas.
+### Tarea 8. Agente revisor y respuesta a @claude
+
+1. En core: añadir `reusable-agent-review.yml`, `reusable-agent-respond.yml`, `scripts/agent/` y los prompts `review.md` y `respond.md`. Fusionar y mover la etiqueta `v1` a la nueva `main` (aquí también se creó `v1.3.0`).
+2. En app, en la web de GitHub: *Settings → Secrets and variables → Actions → New repository secret* con el nombre `AGENT_APP_PRIVATE_KEY` y el contenido completo del `.pem` del agente. `CLAUDE_CODE_OAUTH_TOKEN` ya existe desde la extensión A.
+3. En app: añadir `.github/workflows/agent-review.yml` y `agent-respond.yml`, que llaman a los anteriores con el ID de la App del agente, y fusionar. `@claude` solo responde cuando `agent-respond.yml` ya está en `main`.
+4. En app: abrir un PR con un test que falle y comentar `@claude` pidiendo que pase. Comprobar que llega un commit de `almagentic-agent[bot]`, que los checks salen en verde y que el revisor comenta.
+
+Para ejecutar los tests de los scripts en local, desde el repo core:
+
+```
+(cd scripts/agent && uvx --with pytest==9.1.1 pytest -q)
+```
+
+> Los pasos de las tareas 9 a 12 y B a F se añadirán al completarlas.
 
 ## Estructura de los repositorios
 
@@ -794,13 +874,13 @@ poc-almagentic-app/
   .claude/                      permisos, hook y sandbox
   .specify/memory/              constitución de Spec Kit
   .devcontainer/                entorno aislado y start-agent.sh
-  .github/                      plantillas y workflows que llaman a core
+  .github/                      plantillas y workflows que llaman a core (CI, seguridad, triage y agentes)
   src/, tests/, specs/          aplicación, pruebas y especificaciones
 
 poc-almagentic-core/
   agent-standards/              estándar común del harness (v1.0.0)
-  .github/workflows/            workflows reutilizables (triage, CI…)
-  prompts/, scripts/            prompt y scripts del triage
+  .github/workflows/            workflows reutilizables (triage, CI, seguridad y agentes)
+  prompts/, scripts/            prompts y scripts del triage, los agentes y el escaneo
   docs/poc/, docs/tfm/          bitácora, panel y esta memoria
 
 poc-almagentic-gitops/
@@ -820,6 +900,10 @@ poc-almagentic-gitops/
 | No se ven los artefactos de Actions | Están en la página *Summary* de la ejecución |
 | `bwrap: No permissions to create a new namespace` | Añadir `--security-opt seccomp=unconfined` a `runArgs` y reconstruir el contenedor |
 | `start-agent.sh: AGENT_APP_ID: Define AGENT_APP_ID` | La terminal está fuera del contenedor: *Dev Containers: Reopen in Container* y comprobar con `echo "$AGENT_APP_ID"` |
+| `git push` rechaza la contraseña tras activar 2FA | Mover la etiqueta desde la web o iniciar sesión con `gh auth login` y `gh auth setup-git` |
+| No aparece *Re-run all jobs* | La ejecución falló al arrancar; hacer un push nuevo a la rama del PR |
+| `@claude` no hace nada | Comprobar que `agent-respond.yml` está en `main` de app y que el comentario está en un PR (no en un issue) y lo escribe un colaborador |
+| El agente comenta que no ha podido completar la petición | La rama cambió mientras trabajaba o el modelo falló; revisar la ejecución enlazada en el comentario y volver a pedirlo |
 
 # Conclusiones y trabajo futuro
 
@@ -830,6 +914,7 @@ poc-almagentic-gitops/
 3. La defensa en profundidad funciona y hace falta. El modelo respeta las reglas cuando se le pide algo prohibido de forma directa, pero si se equivoca o lo manipulan, la seguridad depende de las capas que impone la plataforma.
 4. Separar pensar de actuar neutraliza la *prompt injection* en el triage. El modelo detectó el ataque, pero el diseño no depende de que lo detecte.
 5. La revisión humana sigue encontrando problemas que el modelo no ve. Varios de los más relevantes los detectó el autor (ficheros generados, estructura de la documentación) o solo aparecieron en su entorno real.
+6. El patrón de pensar y actuar por separado sirve también para un agente que escribe código. En la respuesta a `@claude` el modelo cambia ficheros pero no puede publicarlos; un script sin modelo decide si el cambio se sube. Al pedirle que hiciera pasar unos tests, el agente modificó un test existente. Tenía motivo y lo declaró, pero ese es el tipo de cambio que debe revisar una persona.
 
 ## Trabajo futuro
 
@@ -937,4 +1022,19 @@ def validate(data, issue, open_numbers):
     dup = data.get("duplicado_de")
     out["duplicado_de"] = dup if dup in candidates else None
     ...
+```
+
+Publicación del cambio del agente en la respuesta a `@claude` (`reusable-agent-respond.yml`, job `publish`, resumido):
+
+```
+if [ "$(git rev-parse HEAD)" != "$HEAD_SHA" ] || ! git apply --index cambio.patch; then
+  report failed; exit 1
+fi
+git -c user.name="$AGENT" -c user.email="${id}+${AGENT}@users.noreply.github.com" \
+  commit -q -m "chore(agent): cambio pedido en el PR #${PR}"
+if ! python3 check_pr_files.py HEAD~1 HEAD --agent "$AGENT" --pr-author "$AGENT"; then
+  report rejected; exit 1
+fi
+git push origin "HEAD:refs/heads/${HEAD_REF}"
+report pushed
 ```
