@@ -1,0 +1,152 @@
+# Escaneo de seguridad reutilizable (tarea 7).
+# Las herramientas, sus versiones y su configuración las fija core: el repo que lo
+# llama (y el agente que trabaja en él) no puede silenciarlas.
+#
+#   jobs:
+#     security:
+#       permissions: { contents: read }
+#       uses: acbacb77/poc-almagentic-core/.github/workflows/reusable-security.yml@v1
+#
+# El check obligatorio es "security / result", que resume los cuatro escaneos.
+name: reusable-security
+
+on:
+  workflow_call:
+    inputs:
+      core-ref:
+        description: Versión de poc-almagentic-core con los scripts
+        type: string
+        default: v1
+      source-dir:
+        description: Carpeta con el código de la aplicación
+        type: string
+        default: src
+      allowed-licenses:
+        description: Licencias permitidas (coincidencia parcial, separadas por ;)
+        type: string
+        default: "MIT;BSD;Apache;ISC;Python Software Foundation;PSF;Mozilla Public License 2.0;MPL-2.0;Unlicense"
+      agent-login:
+        description: Identidad del agente en GitHub
+        type: string
+        default: almagentic-agent[bot]
+
+permissions: {}
+
+env:
+  BANDIT_VERSION: "1.9.4"
+  PIP_AUDIT_VERSION: "2.10.1"
+  PIP_LICENSES_VERSION: "5.5.5"
+  GITLEAKS_VERSION: "8.30.1"
+  GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+
+jobs:
+  sast:
+    name: sast
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: Bandit (severidad media o alta; ignora los "# nosec")
+        env:
+          SOURCE_DIR: ${{ inputs.source-dir }}
+        run: uvx "bandit==$BANDIT_VERSION" -r "$SOURCE_DIR" --ignore-nosec -ll -f custom --msg-template '::error file={relpath},line={line}::{test_id} {msg} (severidad {severity})'
+
+  dependencies:
+    name: dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          python-version: "3.12"
+      - name: Vulnerabilidades conocidas (pip-audit sobre uv.lock)
+        run: |
+          uv export --frozen --format requirements-txt --no-hashes --no-emit-project -o "$RUNNER_TEMP/requisitos.txt"
+          uvx "pip-audit==$PIP_AUDIT_VERSION" -r "$RUNNER_TEMP/requisitos.txt" --strict --progress-spinner off
+      - name: Licencias permitidas
+        env:
+          ALLOWED: ${{ inputs.allowed-licenses }}
+        run: |
+          uv sync --frozen
+          uv run --with "pip-licenses==$PIP_LICENSES_VERSION" pip-licenses --partial-match --allow-only "$ALLOWED"
+
+  secrets:
+    name: secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Instalar gitleaks (versión fijada y checksum verificado)
+        run: |
+          url="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfL -o "$RUNNER_TEMP/gitleaks.tgz" "$url"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/gitleaks.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/gitleaks.tgz" -C "$RUNNER_TEMP" gitleaks
+      - name: Buscar secretos en los commits nuevos
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if git cat-file -e "$BASE^{commit}" 2>/dev/null; then range="$BASE..$HEAD"; else range="$HEAD"; fi
+          "$RUNNER_TEMP/gitleaks" git --redact --no-banner --log-opts="$range" .
+
+  governance:
+    name: governance
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Scripts de core
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: acbacb77/poc-almagentic-core
+          ref: ${{ inputs.core-ref }}
+          path: .core
+          persist-credentials: false
+      - name: Ficheros generados y cambios del agente en lo que lo gobierna
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login || github.actor }}
+          AGENT: ${{ inputs.agent-login }}
+        run: |
+          if ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "Sin commit base que comparar; nada que revisar."
+            exit 0
+          fi
+          python3 .core/scripts/security/check_pr_files.py "$BASE" "$HEAD" --agent "$AGENT" --pr-author "$PR_AUTHOR"
+
+  result:
+    name: result
+    if: always()
+    needs: [sast, dependencies, secrets, governance]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - name: Resumen
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$RESULTS" | jq -e 'all(.[]; .result == "success")' > /dev/null

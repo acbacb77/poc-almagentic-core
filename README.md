@@ -27,7 +27,7 @@ jobs:
   reusable-triage.yml         # agente de triage de peticiones (tarea A)
   ci.yml                      # tests propios de core: hook y triage
   reusable-ci.yml             # tests, lint (ruff) y tipos (mypy) con uv.lock (tarea 6)
-  reusable-security.yml       # Semgrep, Trivy, gitleaks (tarea 7)
+  reusable-security.yml       # bandit, pip-audit, licencias, gitleaks y cambios del agente (tarea 7)
   reusable-agent-review.yml   # revisor con permisos mínimos (tarea 8)
   reusable-supply-chain.yml   # SBOM, firma, atestación (tarea 9)
   reusable-promote.yml        # abre el PR en gitops (tarea 10)
