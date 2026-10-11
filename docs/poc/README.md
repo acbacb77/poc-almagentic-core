@@ -2,7 +2,7 @@
 
 Registro de todo lo hecho en la POC: decisiones, pasos manuales, PRs y problemas resueltos. Se actualiza al cerrar cada tarea, junto con la [memoria del TFM](../tfm/README.md), que es requisito para cerrar la POC.
 
-**Última actualización:** 12 de octubre de 2026 · **Avance:** 9 de 18 tareas (1, 2, 3, A, 4, 5, 6, 7 y 8)
+**Última actualización:** 12 de octubre de 2026 · **Avance:** 10 de 18 tareas (1, 2, 3, A, 4, 5, 6, 7, 8 y F)
 
 **Cada tarea tiene sus prerrequisitos manuales y sus subtareas en orden.** **Leyenda de responsables:** Usuario 👤 (acción manual) · Claude 🤖 (sesión de trabajo) · Agente (bot `almagentic-agent` en el devcontainer) · Automático ⚙️ (GitHub Actions, Argo CD)
 
@@ -33,13 +33,14 @@ Registro de todo lo hecho en la POC: decisiones, pasos manuales, PRs y problemas
 | Clave de `almagentic-agent` | 2 (crear) · 3 (usar) | `%USERPROFILE%\.config\almagentic\agent\agent.pem` (o `~/.config/almagentic/agent/agent.pem` si el repo está dentro de WSL). **Nunca en un repo** | 👤 | Firmar el token de 1 hora del agente |
 | Clave de `almagentic-promoter-gitops` | 2 (crear) · 10 (usar) | `~/.config/almagentic/promoter.pem`, **fuera** de la carpeta `agent/` | 👤 | Se subirá como secreto de Actions en la tarea 10 |
 | `CLAUDE_CODE_OAUTH_TOKEN` | A | app → Settings → Secrets and variables → **Actions** | 👤 (`claude setup-token`) | Que el triage, el revisor y el agente en Actions usen la suscripción de Claude. Caduca al año |
-| `AGENT_APP_PRIVATE_KEY` | 8 | app → Settings → Secrets and variables → **Actions** (contenido completo del `.pem` del agente) | 👤 | Que el job `publish` de la respuesta a `@claude` pida el token de 1 hora de `almagentic-agent` |
+| `AGENT_APP_PRIVATE_KEY` | 8 · F | app → Settings → Secrets and variables → **Actions** (contenido completo del `.pem` del agente) | 👤 | Que el job `publish` de la respuesta a `@claude` pida el token de 1 hora de `almagentic-agent` |
 
 ### Versiones de core
 
 | Etiqueta | Apunta a | Creada por | Notas |
 |---|---|---|---|
-| `v1` | `34d18ef` (core#12) | 👤 release desde la UI | Etiqueta móvil que usan las apps. Se mueve a cada `main` nueva de core. Automatizar en la tarea B |
+| `v1` | `60dd1cc` (core#14) | 👤 release desde la UI | Etiqueta móvil que usan las apps. Se mueve a cada `main` nueva de core. Automatizar en la tarea B |
+| `v1.4.0` | `60dd1cc` (core#14) | 👤 | Agente autónomo de features (extensión F) |
 | `v1.3.0` | `34d18ef` (core#12) | 👤 | Agente revisor y respuesta a `@claude` |
 | `v1.2.0` | `e6076fa` (core#10) | 👤 | Escaneo de seguridad |
 | `v1.1.0` | `d66db38` (core#8) | 👤 | CI reutilizable |
@@ -61,8 +62,8 @@ Las tareas con letra son **extensiones ALM**: se añadieron al plan original y s
 | **6** | CI: build, tests y lint | Principal | ✅ Hecha |
 | **7** | Scan de seguridad | Principal | ✅ Hecha |
 | **8** | Agente revisor y respuesta a @claude | Principal | ✅ Hecha |
-| ↳ F | Agente autónomo en Actions | Extensión ALM (entre 8 y 9) | ⏭️ Siguiente |
-| **9** | Supply chain | Principal | Pendiente |
+| ↳ F | Agente autónomo en Actions | Extensión ALM (entre 8 y 9) | ✅ Hecha |
+| **9** | Supply chain | Principal | ⏭️ Siguiente |
 | **10** | Deploy GitOps con gate humano | Principal | Pendiente |
 | ↳ B | Gestión de releases | Extensión ALM (entre 10 y 11) | Pendiente |
 | **11** | Cerrar el loop de operación | Principal | Pendiente |
@@ -403,7 +404,7 @@ Un revisor sin herramientas comenta cada PR contra la spec, y un comentario @cla
 
 ---
 
-> ## ↳ Tarea F · Agente autónomo en Actions ⏭️
+> ## ↳ Tarea F · Agente autónomo en Actions ✅
 >
 > **Extensión ALM** · se ejecuta entre la tarea 8 y la 9.
 >
@@ -417,21 +418,25 @@ Un revisor sin herramientas comenta cada PR contra la spec, y un comentario @cla
 >
 > | # | Subtarea | Quién | Estado | Enlaces |
 > |---|---|---|---|---|
-> | F.1 | Workflow reutilizable del agente en core: etiqueta aprobado → PR de la spec | Claude 🤖 | ⬜ |  |
-> | F.2 | Disparador al fusionar una spec → PR de implementación con Closes #issue | Claude 🤖 | ⬜ |  |
-> | F.3 | Solo disparan usuarios con escritura; límite de turnos y de tiempo por ejecución | Claude 🤖 | ⬜ |  |
-> | F.4 | Control de la red de salida del runner (equivalente al sandbox) | Claude 🤖 | ⬜ |  |
-> | F.5 | Fusionar, actualizar la etiqueta de core y probar con una petición nueva | Usuario 👤 | ⬜ |  |
+> | F.1 | Workflow reutilizable del agente en core: etiqueta aprobado → PR de la spec | Claude 🤖 | ✅ | [core#14](https://github.com/acbacb77/poc-almagentic-core/pull/14) |
+> | F.2 | Disparador al fusionar una spec → PR de implementación con Closes #issue | Claude 🤖 | ✅ | [core#14](https://github.com/acbacb77/poc-almagentic-core/pull/14) · [app#17](https://github.com/acbacb77/poc-almagentic-app/pull/17) |
+> | F.3 | Solo disparan usuarios con escritura; límite de turnos y de tiempo por ejecución | Claude 🤖 | ✅ | [core#14](https://github.com/acbacb77/poc-almagentic-core/pull/14) |
+> | F.4 | Control de la red de salida del runner: sandbox del repo con dominios permitidos | Claude 🤖 | ✅ | [core#14](https://github.com/acbacb77/poc-almagentic-core/pull/14) |
+> | F.5 | Fusionar core#14 y app#17, mover v1 (y crear v1.4.0) | Usuario 👤 | ✅ |  |
+> | F.6 | Prueba real: petición #18 → spec (app#19) → implementación (app#20) | Usuario 👤 | ✅ | [#18 búsqueda por nombre](https://github.com/acbacb77/poc-almagentic-app/issues/18) · [app#19](https://github.com/acbacb77/poc-almagentic-app/pull/19) · [app#20](https://github.com/acbacb77/poc-almagentic-app/pull/20) |
+> | F.7 | Título del PR sin el prefijo de la plantilla | Claude 🤖 | ✅ | [core#15](https://github.com/acbacb77/poc-almagentic-core/pull/15) |
 >
 > ### Detalle
 >
 > **Por qué**: sin esta extensión el desarrollador escribe dos prompts por feature en el devcontainer (spec e implementación). Con ella, el agente arranca con los mismos eventos en los que ya decide un humano: la etiqueta `aprobado` y el merge de la spec. El devcontainer se mantiene como modo interactivo.
 >
-> **Riesgos y controles**: el agente lee el issue sin una persona delante, así que solo lo disparan usuarios con escritura (como el triage). Usa el token de una hora de la GitHub App, limitado a app y sin permiso sobre workflows. En el runner no hay bubblewrap: el aislamiento lo da la máquina efímera y la red se limita con un control de salida. Cada ejecución tiene límite de turnos y de tiempo.
+> **Cómo** (repo `poc-almagentic-core`, `reusable-agent-feature.yml`): el job `work` comprueba permiso de escritura de quien dispara, issue abierto con `aprobado` y sin `triage:sospechoso`, y que no exista ya la rama; después ejecuta Claude Code con el harness y el sandbox del repo (red limitada a GitHub y PyPI), 40 o 150 turnos y 60 minutos, sin token de GitHub. El job `publish` decide la rama, rechaza en la fase spec todo lo que no esté en `specs/`, pasa `check_pr_files.py`, sube la rama, abre el PR como `almagentic-agent[bot]` y lo anuncia en el issue.
+>
+> **Prueba** (petición #18, búsqueda por nombre): 2 min de etiqueta a PR de spec (app#19); un `@claude` resolvió las dos dudas; 2 min de merge a PR de implementación (app#20, 103 tests); un segundo `@claude` corrigió la fuga del texto de `q` en el log de acceso que encontró el revisor. 25 minutos de issue a cierre, con cuatro decisiones humanas.
 
 ---
 
-## Tarea 9 · Supply chain ⬜
+## Tarea 9 · Supply chain ⏭️
 
 SBOM, firma de la imagen y provenance.
 
@@ -445,8 +450,6 @@ SBOM, firma de la imagen y provenance.
 |---|---|---|---|---|
 | 9.1 | SBOM, firma y atestación de la imagen | Claude 🤖 | ⬜ |  |
 | 9.2 | Fusionar y etiqueta de core | Usuario 👤 | ⬜ |  |
-
-_Subtareas previstas: se ajustarán al llegar a la tarea._
 
 ---
 
@@ -624,7 +627,9 @@ _Subtareas previstas: se ajustarán al llegar a la tarea._
 | `git push` pide contraseña y falla tras activar 2FA | GitHub no acepta la contraseña por HTTPS con 2FA | Mover etiquetas desde la web (borrar release y etiqueta, recrearlas en `main`) o `gh auth login` + `gh auth setup-git` en WSL |
 | No aparece *Re-run all jobs* | La ejecución falló al arrancar porque el workflow reutilizable no estaba en la etiqueta | Push nuevo a la rama del PR (p. ej. un commit vacío) |
 | `@claude` no hace nada | `agent-respond.yml` aún no estaba en `main` de app; `issue_comment` solo lee la rama por defecto | Fusionar primero app#15 |
-| El agente en Actions no puede usar `uv run` | La caché de uv del runner es de solo lectura dentro del sandbox | El agente usó `.venv/bin/python -m ...`; pendiente fijar `UV_CACHE_DIR` en el workflow |
+| El agente en Actions no puede usar `uv run` | La caché de uv del runner es de solo lectura dentro del sandbox | `UV_CACHE_DIR` dentro del proyecto y excluida de git (core#14) |
+| El agente ve `.bashrc`, `.idea`, `.mcp.json`… sin seguimiento | El sandbox de Claude Code protege esos ficheros de la carpeta de trabajo mientras dura la sesión | No entran en el parche; el script solo publica lo que corresponde a la fase |
+| El revisor dice que un test de Unicode descompuesto usa la forma precompuesta | El revisor solo ve texto y no distingue `á` de `a` + U+0301 | Falso positivo; se comprobaron los bytes |
 
 ---
 
@@ -639,6 +644,6 @@ _Subtareas previstas: se ajustarán al llegar a la tarea._
 ## Pendientes menores
 
 - Triage: mostrar en el comentario el motivo cuando el modelo devuelve un error (p. ej. el 401).
-- Respuesta a `@claude`: dar al agente una caché de uv escribible (`UV_CACHE_DIR` dentro del espacio de trabajo).
 - Revisor (app#15): fijar por SHA los workflows reutilizables que reciben secretos (tarea B).
 - Commits del bot sin firma (*Unverified*): valorar firmarlos en la tarea 9.
+- Despliegue (tarea 10): comprobar con uvicorn real que el filtro `SinQueryString` quita `q` del log de acceso.

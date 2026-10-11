@@ -887,7 +887,7 @@ const TASKS = [
   "id": "F",
   "title": "Agente autónomo en Actions",
   "phase": "Construcción",
-  "status": "next",
+  "status": "done",
   "desc": "La etiqueta aprobado lanza al agente en Actions para escribir la spec, y el merge de la spec lanza el plan, las tareas y la implementación. Desaparecen los prompts manuales del devcontainer; las aprobaciones humanas no cambian.",
   "alm": [
    "8",
@@ -903,32 +903,86 @@ const TASKS = [
    [
     "Workflow reutilizable del agente en core: etiqueta aprobado → PR de la spec",
     "claude",
-    false,
-    []
+    true,
+    [
+     {
+      "label": "core#14",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/14"
+     }
+    ]
    ],
    [
     "Disparador al fusionar una spec → PR de implementación con Closes #issue",
     "claude",
-    false,
-    []
+    true,
+    [
+     {
+      "label": "core#14",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/14"
+     },
+     {
+      "label": "app#17",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/17"
+     }
+    ]
    ],
    [
     "Solo disparan usuarios con escritura; límite de turnos y de tiempo por ejecución",
     "claude",
-    false,
-    []
+    true,
+    [
+     {
+      "label": "core#14",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/14"
+     }
+    ]
    ],
    [
-    "Control de la red de salida del runner (equivalente al sandbox)",
+    "Control de la red de salida del runner: sandbox del repo con dominios permitidos",
     "claude",
-    false,
+    true,
+    [
+     {
+      "label": "core#14",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/14"
+     }
+    ]
+   ],
+   [
+    "Fusionar core#14 y app#17, mover v1 (y crear v1.4.0)",
+    "usuario",
+    true,
     []
    ],
    [
-    "Fusionar, actualizar la etiqueta de core y probar con una petición nueva",
+    "Prueba real: petición #18 → spec (app#19) → implementación (app#20)",
     "usuario",
-    false,
-    []
+    true,
+    [
+     {
+      "label": "#18 búsqueda por nombre",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/issues/18"
+     },
+     {
+      "label": "app#19",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/19"
+     },
+     {
+      "label": "app#20",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/20"
+     }
+    ]
+   ],
+   [
+    "Título del PR sin el prefijo de la plantilla",
+    "claude",
+    true,
+    [
+     {
+      "label": "core#15",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/15"
+     }
+    ]
    ]
   ]
  },
@@ -936,7 +990,7 @@ const TASKS = [
   "id": "9",
   "title": "Supply chain",
   "phase": "Entrega",
-  "status": "todo",
+  "status": "next",
   "desc": "SBOM, firma de la imagen y provenance.",
   "alm": null,
   "prereqs": [],
