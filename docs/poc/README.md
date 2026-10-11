@@ -2,7 +2,7 @@
 
 Registro de todo lo hecho en la POC: decisiones, pasos manuales, PRs y problemas resueltos. Se actualiza al cerrar cada tarea, junto con la [memoria del TFM](../tfm/README.md), que es requisito para cerrar la POC.
 
-**Última actualización:** 11 de octubre de 2026 · **Avance:** 7 de 18 tareas (1, 2, 3, A, 4, 5 y 6)
+**Última actualización:** 11 de octubre de 2026 · **Avance:** 8 de 18 tareas (1, 2, 3, A, 4, 5, 6 y 7)
 
 **Cada tarea tiene sus prerrequisitos manuales y sus subtareas en orden.** **Leyenda de responsables:** Usuario 👤 (acción manual) · Claude 🤖 (sesión de trabajo) · Agente (bot `almagentic-agent` en el devcontainer) · Automático ⚙️ (GitHub Actions, Argo CD)
 
@@ -55,8 +55,8 @@ Las tareas con letra son **extensiones ALM**: se añadieron al plan original y s
 | **4** | Spec de la feature con Spec Kit | Principal | ✅ Hecha |
 | **5** | Implementación por el agente + tests | Principal | ✅ Hecha |
 | **6** | CI: build, tests y lint | Principal | ✅ Hecha |
-| **7** | Scan de seguridad | Principal | ⏭️ Siguiente |
-| **8** | Agente revisor y respuesta a @claude | Principal | Pendiente |
+| **7** | Scan de seguridad | Principal | ✅ Hecha |
+| **8** | Agente revisor y respuesta a @claude | Principal | ⏭️ Siguiente |
 | ↳ F | Agente autónomo en Actions | Extensión ALM (entre 8 y 9) | Pendiente |
 | **9** | Supply chain | Principal | Pendiente |
 | **10** | Deploy GitOps con gate humano | Principal | Pendiente |
@@ -335,9 +335,9 @@ Workflow reutilizable en core que valida cada PR de app en una máquina limpia (
 
 ---
 
-## Tarea 7 · Scan de seguridad ⏭️
+## Tarea 7 · Scan de seguridad ✅
 
-SAST, dependencias, secretos, configuración del agente y ficheros generados en PRs.
+Workflow reutilizable en core con cuatro escaneos (bandit, pip-audit y licencias, gitleaks y cambios del agente en lo que lo gobierna) y un check resumen obligatorio.
 
 ### Prerrequisitos manuales
 
@@ -347,13 +347,25 @@ SAST, dependencias, secretos, configuración del agente y ficheros generados en 
 
 | # | Subtarea | Quién | Estado | Enlaces |
 |---|---|---|---|---|
-| 7.1 | Workflow reutilizable de seguridad en core | Claude 🤖 | ⬜ |  |
-| 7.2 | Detectar ficheros generados y cambios en la config del agente (incluido .specify/) | Claude 🤖 | ⬜ |  |
-| 7.3 | Fusionar, etiqueta de core y check obligatorio | Usuario 👤 | ⬜ |  |
+| 7.1 | Workflow reutilizable de seguridad en core (security / result) | Claude 🤖 | ✅ | [core#10](https://github.com/acbacb77/poc-almagentic-core/pull/10) |
+| 7.2 | Detectar ficheros generados y cambios del agente en .github/, .claude/, .specify/ y la configuración de pyproject | Claude 🤖 | ✅ | [core#10](https://github.com/acbacb77/poc-almagentic-core/pull/10) |
+| 7.3 | Llamada al escaneo desde app | Claude 🤖 | ✅ | [app#13](https://github.com/acbacb77/poc-almagentic-app/pull/13) |
+| 7.4 | Fusionar core#10, mover v1 de core, fusionar app#13 | Usuario 👤 | ✅ |  |
+| 7.5 | Marcar security / result como obligatorio en el ruleset de main de app | Usuario 👤 | ✅ |  |
+| 7.6 | Probar que un PR con un .pyc queda bloqueado | Claude 🤖 | ✅ | [app#14](https://github.com/acbacb77/poc-almagentic-app/pull/14) |
+| 7.7 | Borrar las ramas de prueba de app (Delete branch en app#12 y app#14) | Usuario 👤 | ⬜ |  |
+
+### Detalle
+
+**Escaneos** (repo `poc-almagentic-core`, `reusable-security.yml`): `sast` (bandit 1.9.4, ignora `# nosec`), `dependencies` (pip-audit 2.10.1 y licencias permitidas con pip-licenses 5.5.5), `secrets` (gitleaks 8.30.1 con checksum verificado), `governance` (`scripts/security/check_pr_files.py`, 21 tests) y `result`, que es el check obligatorio.
+
+**Bandit y no Semgrep**: las reglas de Semgrep se descargan en cada ejecución; las de bandit van en la versión fijada y el resultado es reproducible.
+
+**Hallazgo**: `governance` habría marcado app#10, donde el agente creó `[tool.ruff]` excluyendo `.claude/` y `.specify/`. Desde ahora ese cambio lo hace una persona.
 
 ---
 
-## Tarea 8 · Agente revisor y respuesta a @claude ⬜
+## Tarea 8 · Agente revisor y respuesta a @claude ⏭️
 
 Revisión automática contra la spec y cambios a petición, solo para usuarios con escritura.
 
@@ -368,8 +380,6 @@ Revisión automática contra la spec y cambios a petición, solo para usuarios c
 | 8.1 | Revisión automática de PRs contra la spec | Claude 🤖 | ⬜ |  |
 | 8.2 | Respuesta a @claude solo para colaboradores | Claude 🤖 | ⬜ |  |
 | 8.3 | Probar con un comentario en un PR | Usuario 👤 | ⬜ |  |
-
-_Subtareas previstas: se ajustarán al llegar a la tarea._
 
 ---
 

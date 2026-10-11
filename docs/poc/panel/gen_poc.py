@@ -97,13 +97,17 @@ TASKS = [
                ("Marcar ci / checks como obligatorio en el ruleset de main de app", "usuario", True, []),
                ("Probar que un PR con el CI en rojo queda bloqueado", "claude", True, [pr("app", 12)]),
                ("Borrar la rama test/ci-rojo de app (botón Delete branch en app#12)", "usuario", False, [])]),
-    dict(id="7", title="Scan de seguridad", phase="Calidad", status="next",
-         desc="SAST, dependencias, secretos, configuración del agente y ficheros generados en PRs.",
+    dict(id="7", title="Scan de seguridad", phase="Calidad", status="done",
+         desc="Workflow reutilizable en core con cuatro escaneos (bandit, pip-audit y licencias, gitleaks y cambios del agente en lo que lo gobierna) y un check resumen obligatorio.",
          prereqs=[],
-         subs=[("Workflow reutilizable de seguridad en core", "claude", False, []),
-               ("Detectar ficheros generados y cambios en la config del agente (incluido .specify/)", "claude", False, []),
-               ("Fusionar, etiqueta de core y check obligatorio", "usuario", False, [])]),
-    dict(id="8", title="Agente revisor y respuesta a @claude", phase="Calidad", status="todo",
+         subs=[("Workflow reutilizable de seguridad en core (security / result)", "claude", True, [pr("core", 10)]),
+               ("Detectar ficheros generados y cambios del agente en .github/, .claude/, .specify/ y la configuración de pyproject", "claude", True, [pr("core", 10)]),
+               ("Llamada al escaneo desde app", "claude", True, [pr("app", 13)]),
+               ("Fusionar core#10, mover v1 de core, fusionar app#13", "usuario", True, []),
+               ("Marcar security / result como obligatorio en el ruleset de main de app", "usuario", True, []),
+               ("Probar que un PR con un .pyc queda bloqueado", "claude", True, [pr("app", 14)]),
+               ("Borrar las ramas de prueba de app (Delete branch en app#12 y app#14)", "usuario", False, [])]),
+    dict(id="8", title="Agente revisor y respuesta a @claude", phase="Calidad", status="next",
          desc="Revisión automática contra la spec y cambios a petición, solo para usuarios con escritura.",
          prereqs=[("Clave de almagentic-agent como secreto de Actions en app", False)],
          subs=[("Revisión automática de PRs contra la spec", "claude", False, []),
@@ -260,6 +264,11 @@ DETAILS = {
 **Check obligatorio** (repo `poc-almagentic-app`): *Settings → Rules → Rulesets* → ruleset de `main` → *Require status checks to pass* → *Add checks* → `ci / checks`.
 
 **Problema típico**: una ejecución que falla porque el workflow reutilizable no existe en la etiqueta no se puede relanzar con *Re-run*; hay que hacer un push nuevo a la rama del PR (por ejemplo, un commit vacío).""",
+    "7": """**Escaneos** (repo `poc-almagentic-core`, `reusable-security.yml`): `sast` (bandit 1.9.4, ignora `# nosec`), `dependencies` (pip-audit 2.10.1 y licencias permitidas con pip-licenses 5.5.5), `secrets` (gitleaks 8.30.1 con checksum verificado), `governance` (`scripts/security/check_pr_files.py`, 21 tests) y `result`, que es el check obligatorio.
+
+**Bandit y no Semgrep**: las reglas de Semgrep se descargan en cada ejecución; las de bandit van en la versión fijada y el resultado es reproducible.
+
+**Hallazgo**: `governance` habría marcado app#10, donde el agente creó `[tool.ruff]` excluyendo `.claude/` y `.specify/`. Desde ahora ese cambio lo hace una persona.""",
     "F": """**Por qué**: sin esta extensión el desarrollador escribe dos prompts por feature en el devcontainer (spec e implementación). Con ella, el agente arranca con los mismos eventos en los que ya decide un humano: la etiqueta `aprobado` y el merge de la spec. El devcontainer se mantiene como modo interactivo.
 
 **Riesgos y controles**: el agente lee el issue sin una persona delante, así que solo lo disparan usuarios con escritura (como el triage). Usa el token de una hora de la GitHub App, limitado a app y sin permiso sobre workflows. En el runner no hay bubblewrap: el aislamiento lo da la máquina efímera y la red se limita con un control de salida. Cada ejecución tiene límite de turnos y de tiempo.""",
