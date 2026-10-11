@@ -10,7 +10,9 @@ MAX_TEXT = 600
 
 
 def git(repo: str, *args: str) -> str:
-    return subprocess.run(["git", "-C", repo, *args], check=True, capture_output=True, text=True).stdout
+    return subprocess.run(
+        ["git", "-C", repo, *args], check=True, capture_output=True, text=True
+    ).stdout
 
 
 def clip(text: str, limit: int) -> str:
@@ -20,7 +22,12 @@ def clip(text: str, limit: int) -> str:
 def untrusted(text: str | None, limit: int) -> str:
     """Texto escrito por terceros: se recorta y no puede cerrar la etiqueta que lo envuelve."""
     s = clip(str(text or ""), limit)
-    return re.sub(r"</?\s*(datos|instruccion|spec|diff|pr)\b", "[etiqueta eliminada]", s, flags=re.I)
+    return re.sub(
+        r"</?\s*(datos|instruccion|spec|diff|pr)\b",
+        "[etiqueta eliminada]",
+        s,
+        flags=re.I,
+    )
 
 
 def safe(text: object, limit: int = MAX_TEXT) -> str:
@@ -28,6 +35,16 @@ def safe(text: object, limit: int = MAX_TEXT) -> str:
     s = " ".join(str(text or "").split())
     s = s.replace("<", "&lt;").replace(">", "&gt;").replace("![", "!\\[")
     s = re.sub(r"@(?=[A-Za-z0-9_-])", "@​", s)
+    return s if len(s) <= limit else s[: limit - 1] + "…"
+
+
+def safe_lines(text: object, limit: int = 4_000) -> str:
+    """Como safe, pero conserva los saltos de línea (para descripciones de PR y comentarios largos)."""
+    lines = [
+        safe(line, 1_000) if line.strip() else ""
+        for line in str(text or "").splitlines()
+    ]
+    s = re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
     return s if len(s) <= limit else s[: limit - 1] + "…"
 
 

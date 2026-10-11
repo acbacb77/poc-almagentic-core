@@ -109,7 +109,12 @@ jobs:
 
       - name: Dependencias de la aplicación
         working-directory: app
-        run: uv sync --frozen
+        env:
+          UV_CACHE_DIR: ${{ github.workspace }}/app/.uv-cache
+        run: |
+          # Caché de uv dentro del proyecto para que el sandbox deje escribir en ella; nunca entra en el parche.
+          echo ".uv-cache/" >> .git/info/exclude
+          uv sync --frozen
 
       - name: Atender la petición (harness del repo, sin token de GitHub)
         working-directory: app
@@ -117,6 +122,7 @@ jobs:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           MODEL: ${{ inputs.model }}
           MAX_TURNS: ${{ inputs.max-turns }}
+          UV_CACHE_DIR: ${{ github.workspace }}/app/.uv-cache
         run: |
           set +e
           claude -p "$(cat "$GITHUB_WORKSPACE/prompt.md")" \
