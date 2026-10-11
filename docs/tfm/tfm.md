@@ -446,9 +446,29 @@ Para que app viera el workflow nuevo hubo que mover la etiqueta `v1` de core a l
 
 Para comprobar que el check bloquea de verdad se abrió un PR de prueba (app#12) con un `import` sin usar. El CI terminó en rojo con la anotación de ruff en la línea exacta (`F401 os imported but unused`) y GitHub marcó el PR como bloqueado. El PR se cerró sin fusionar.
 
+## Tarea 7: escaneo de seguridad
+
+El CI comprueba que el código funciona; la tarea 7 añade un segundo check obligatorio que busca problemas de seguridad y de gobierno. Igual que el CI, el workflow vive en core: las herramientas, sus versiones y su configuración las fija core, y ni el repo que lo llama ni el agente pueden silenciarlas.
+
+| Escaneo | Herramienta | Qué bloquea |
+|---|---|---|
+| `sast` | bandit 1.9.4 | Problemas de severidad media o alta en `src/`; ignora los comentarios `# nosec` |
+| `dependencies` | pip-audit 2.10.1 y pip-licenses 5.5.5 | Vulnerabilidades conocidas en `uv.lock` y licencias fuera de la lista permitida (MIT, BSD, Apache, ISC, PSF, MPL-2.0) |
+| `secrets` | gitleaks 8.30.1 | Secretos en los commits nuevos; el binario se descarga con su checksum SHA-256 verificado |
+| `governance` | `check_pr_files.py` (script propio, 21 tests) | Ficheros generados de cualquier autor y, si algún commit es del agente, cambios en los ficheros que lo gobiernan o en la configuración de ruff, mypy y pytest |
+| `result` | jq | Resume los cuatro; es el check que exige el ruleset |
+
+Se eligió bandit en lugar de Semgrep porque las reglas de Semgrep se descargan de su registro en cada ejecución, de modo que el resultado puede cambiar sin que cambie el repositorio. Bandit lleva las reglas dentro de la versión fijada.
+
+El escaneo `governance` cubre lo que ningún escáner genérico sabe: qué ficheros gobiernan al agente. Cierra el hueco que quedó abierto en la tarea 4, donde el hook solo protegía `.specify/memory/`. Al probarlo con PRs ya fusionados apareció un caso real: habría marcado app#10, porque el agente creó la sección `[tool.ruff]` de `pyproject.toml` y excluyó `.claude/` y `.specify/` del lint. El agente lo había declarado en el PR y se aprobó, pero desde ahora un cambio así tiene que hacerlo una persona en su propio PR.
+
+### Prueba del bloqueo
+
+Como en la tarea 6, se abrió un PR de prueba (app#14), esta vez con un fichero `.pyc` dentro de `__pycache__`. El escaneo `governance` falló con la anotación «fichero generado: no debe versionarse», `security / result` quedó en rojo y GitHub bloqueó el merge. Los demás escaneos y el CI salieron en verde, lo que confirma que cada comprobación falla solo por lo suyo.
+
 ## Tareas pendientes
 
-> Las secciones de las tareas 7 a 12 y de las extensiones B a F se añadirán a medida que se implementen: análisis de seguridad, agente revisor, agente autónomo, cadena de suministro, despliegue GitOps, *releases*, operación, mantenimiento, retirada y trazabilidad.
+> Las secciones de las tareas 8 a 12 y de las extensiones B a F se añadirán a medida que se implementen: agente revisor, agente autónomo, cadena de suministro, despliegue GitOps, *releases*, operación, mantenimiento, retirada y trazabilidad.
 
 # Iteraciones con modelos, pruebas y resultados
 
@@ -587,6 +607,15 @@ El registro que sigue resume toda la conversación del proyecto. Se han omitido 
 | 64 | «No me aparece la opción "Re-run all jobs"» | Comprueba que `v1` ya contiene el workflow, deduce que la ejecución falló antes de arrancar y lanza otra con un commit vacío | `ci / checks` en verde |
 | 65 | «Listo. Recuerda especificar en qué repo hay que ejecutar los comandos o las acciones que me indicas» | Lo anota como regla de trabajo. Verifica la regla del ruleset y abre un PR con un error de lint: el CI falla y el merge queda bloqueado | Tarea 6 cerrada |
 
+### Fase 11 · Escaneo de seguridad (11 de octubre)
+
+| # | Petición del autor | Respuesta y acción del modelo | Resultado |
+|---|---|---|---|
+| 66 | «Continuamos» | Prueba las herramientas sobre app antes de fijarlas (Semgrep no es reproducible porque descarga sus reglas, se elige bandit). Escribe `check_pr_files.py` con 21 tests y lo prueba contra PRs reales: habría marcado app#10. Abre core#10 y app#13 | Tarea 7 preparada |
+| 67 | «Pasos 1 y 2 ok» | Comprueba que `v1` apunta a la nueva `main`, relanza app#13 y confirma los cinco checks en verde | Escaneo operativo |
+| 68 | «Listo. Por otra parte, hay otros checks que parecen interesantes: Require code scanning results» | Verifica la regla del ruleset y prueba el bloqueo con un `.pyc` (app#14). Explica qué añadiría CodeQL frente a bandit y cómo activarlo | Tarea 7 comprobada |
+| 69 | «Ya lo haré más adelante; de momento no lo pongas como tarea» | No lo añade al plan; queda solo como posible mejora | Tarea 7 cerrada |
+
 ## Pruebas realizadas y resultados
 
 ### Pruebas automáticas
@@ -596,6 +625,8 @@ El registro que sigue resume toda la conversación del proyecto. Se han omitido 
 | Hook `guard.py` | 45 casos: 21 comandos que deben bloquearse, 10 que deben permitirse, ficheros protegidos, secretos y auditoría | 45/45 superadas |
 | Aplicación: catálogo (`app`) | 55 casos: listado, consulta por id, 404, precio con 2 decimales, orden estable, catálogo mal formado, despliegue de un cambio de precio, observabilidad y `/health` | 55/55 superadas |
 | CI obligatorio (app#12) | PR con un `import` sin usar | CI en rojo y merge bloqueado |
+| Gobierno de PRs (`check_pr_files.py`) | 21 casos: ficheros generados, ficheros protegidos según el autor, cambios de dependencias permitidos y configuración de comprobaciones bloqueada | 21/21 superadas |
+| Escaneo de seguridad obligatorio (app#14) | PR con un `.pyc` en `__pycache__` | `governance` en rojo y merge bloqueado |
 | Triage (`apply.py`, `build_prompt.py`) | 12 casos: salida estructurada, valores inválidos, etiquetas arbitrarias, referencias falsas, neutralización de texto, sospecha de inyección | 12/12 superadas |
 
 ### Pruebas del harness en el entorno real
@@ -638,14 +669,14 @@ El caso de inyección prueba el diseño en dos niveles. El modelo detectó el in
 
 | Métrica | Valor |
 |---|---|
-| Tareas completadas | 7 de 18 (1, 2, 3, A, 4, 5 y 6) |
-| PRs fusionados | 14 (5 en core y 9 en app, dos de ellos del agente), más la documentación |
-| Pruebas automáticas | 112 superadas (57 de harness y triage, 55 de la aplicación) |
-| Iteraciones registradas con el asistente | 65 |
+| Tareas completadas | 8 de 18 (1, 2, 3, A, 4, 5, 6 y 7) |
+| PRs fusionados | 16 (6 en core y 10 en app, dos de ellos del agente), más la documentación |
+| Pruebas automáticas | 133 superadas (57 de harness y triage, 21 de gobierno de PRs, 55 de la aplicación) |
+| Iteraciones registradas con el asistente | 69 |
 | Problemas de entorno resueltos | 14 |
 | Vulnerabilidades de diseño detectadas antes de explotarse | 2 (aprobación imposible sin identidad propia; herencia de credenciales) |
 
-> Este capítulo se ampliará con las iteraciones y pruebas de las tareas 7 a 12 y B a F.
+> Este capítulo se ampliará con las iteraciones y pruebas de las tareas 8 a 12 y B a F.
 
 # Documentación técnica reproducible
 
@@ -736,7 +767,24 @@ git push -f origin v1
 4. En app: *Settings → Rules → Rulesets* → ruleset de `main` → *Require status checks to pass* → añadir `ci / checks`.
 5. En app: abrir un PR con un error de lint y comprobar que queda bloqueado.
 
-> Los pasos de las tareas 7 a 12 y B a F se añadirán al completarlas.
+### Tarea 7. Escaneo de seguridad
+
+1. En core: añadir `reusable-security.yml` y `scripts/security/`, fusionar y mover la etiqueta `v1` a la nueva `main` (como en la tarea 6).
+2. En app: añadir `.github/workflows/security.yml` que llame a `reusable-security.yml@v1` y fusionar cuando los cinco checks salgan en verde.
+3. En app: añadir `security / result` como check obligatorio en el ruleset de `main`, junto a `ci / checks`.
+4. En app: abrir un PR con un fichero `.pyc` y comprobar que `governance` falla y el merge queda bloqueado.
+
+Para reproducir los escaneos en local, desde el repo app:
+
+```
+uvx bandit==1.9.4 -r src --ignore-nosec -ll
+uv export --frozen --format requirements-txt --no-hashes --no-emit-project -o req.txt
+uvx pip-audit==2.10.1 -r req.txt --strict
+uv run --with pip-licenses==5.5.5 pip-licenses --partial-match --allow-only "MIT;BSD;Apache;ISC;PSF;Mozilla Public License 2.0"
+python3 ../poc-almagentic-core/scripts/security/check_pr_files.py origin/main HEAD
+```
+
+> Los pasos de las tareas 8 a 12 y B a F se añadirán al completarlas.
 
 ## Estructura de los repositorios
 

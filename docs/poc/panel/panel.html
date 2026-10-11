@@ -716,25 +716,69 @@ const TASKS = [
   "id": "7",
   "title": "Scan de seguridad",
   "phase": "Calidad",
-  "status": "next",
-  "desc": "SAST, dependencias, secretos, configuración del agente y ficheros generados en PRs.",
+  "status": "done",
+  "desc": "Workflow reutilizable en core con cuatro escaneos (bandit, pip-audit y licencias, gitleaks y cambios del agente en lo que lo gobierna) y un check resumen obligatorio.",
   "alm": null,
   "prereqs": [],
   "subs": [
    [
-    "Workflow reutilizable de seguridad en core",
+    "Workflow reutilizable de seguridad en core (security / result)",
     "claude",
-    false,
+    true,
+    [
+     {
+      "label": "core#10",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/10"
+     }
+    ]
+   ],
+   [
+    "Detectar ficheros generados y cambios del agente en .github/, .claude/, .specify/ y la configuración de pyproject",
+    "claude",
+    true,
+    [
+     {
+      "label": "core#10",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/10"
+     }
+    ]
+   ],
+   [
+    "Llamada al escaneo desde app",
+    "claude",
+    true,
+    [
+     {
+      "label": "app#13",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/13"
+     }
+    ]
+   ],
+   [
+    "Fusionar core#10, mover v1 de core, fusionar app#13",
+    "usuario",
+    true,
     []
    ],
    [
-    "Detectar ficheros generados y cambios en la config del agente (incluido .specify/)",
-    "claude",
-    false,
+    "Marcar security / result como obligatorio en el ruleset de main de app",
+    "usuario",
+    true,
     []
    ],
    [
-    "Fusionar, etiqueta de core y check obligatorio",
+    "Probar que un PR con un .pyc queda bloqueado",
+    "claude",
+    true,
+    [
+     {
+      "label": "app#14",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/14"
+     }
+    ]
+   ],
+   [
+    "Borrar las ramas de prueba de app (Delete branch en app#12 y app#14)",
     "usuario",
     false,
     []
@@ -745,7 +789,7 @@ const TASKS = [
   "id": "8",
   "title": "Agente revisor y respuesta a @claude",
   "phase": "Calidad",
-  "status": "todo",
+  "status": "next",
   "desc": "Revisión automática contra la spec y cambios a petición, solo para usuarios con escritura.",
   "alm": null,
   "prereqs": [
