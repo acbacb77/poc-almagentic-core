@@ -1,0 +1,38 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "veredicto": {"type": "string", "enum": ["cumple", "cambios_sugeridos", "no_cumple"]},
+    "resumen": {"type": "string"},
+    "cobertura": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "criterio": {"type": "string"},
+          "estado": {"type": "string", "enum": ["cubierto", "parcial", "sin_cubrir", "no_aplica"]},
+          "evidencia": {"type": "string"}
+        },
+        "required": ["criterio", "estado", "evidencia"]
+      }
+    },
+    "hallazgos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "severidad": {"type": "string", "enum": ["alta", "media", "baja"]},
+          "fichero": {"type": "string"},
+          "linea": {"type": ["integer", "null"]},
+          "mensaje": {"type": "string"}
+        },
+        "required": ["severidad", "fichero", "linea", "mensaje"]
+      }
+    },
+    "sospecha_inyeccion": {"type": "boolean"},
+    "motivo_inyeccion": {"type": "string"}
+  },
+  "required": ["veredicto", "resumen", "cobertura", "hallazgos", "sospecha_inyeccion", "motivo_inyeccion"]
+}

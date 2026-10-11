@@ -1,0 +1,130 @@
+# Agente revisor (tarea 8): revisa cada PR contra su spec y deja un comentario de revisión.
+#
+#   analyze → el modelo lee el diff y la spec y devuelve JSON. Sin herramientas, sin
+#             token de escritura y ejecutado fuera del repo (no carga su CLAUDE.md).
+#   publish → un script valida el JSON y lo publica como comentario de revisión.
+#             El agente nunca aprueba ni bloquea: decide una persona.
+name: reusable-agent-review
+
+on:
+  workflow_call:
+    inputs:
+      core-ref:
+        description: Versión de poc-almagentic-core con el prompt y los scripts
+        type: string
+        default: v1
+      model:
+        description: Modelo de Claude para la revisión
+        type: string
+        default: sonnet
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        description: Token de `claude setup-token` (suscripción Claude)
+        required: true
+
+permissions: {}
+
+env:
+  CLAUDE_CODE_VERSION: "2.1.296"
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Código del PR
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          path: app
+          persist-credentials: false
+
+      - name: Prompt y scripts de core
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: acbacb77/poc-almagentic-core
+          ref: ${{ inputs.core-ref }}
+          path: core
+          persist-credentials: false
+
+      - name: Preparar el prompt (el PR va como datos)
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          jq '{title: .pull_request.title, body: .pull_request.body}' "$GITHUB_EVENT_PATH" > pr.json
+          git -C app diff --name-only "$BASE...$HEAD" > ficheros.txt
+          cd core/scripts/agent
+          python3 review_prompt.py ../../prompts/review.md "$GITHUB_WORKSPACE/app" "$BASE" "$HEAD" "$GITHUB_WORKSPACE/pr.json" > "$GITHUB_WORKSPACE/prompt.md"
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - name: Instalar Claude Code
+        run: npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+
+      - name: Revisar (modelo sin herramientas, fuera del repo)
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          MODEL: ${{ inputs.model }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/vacio" && cd "$RUNNER_TEMP/vacio"
+          set +e
+          claude -p "$(cat "$GITHUB_WORKSPACE/prompt.md")" \
+            --model "$MODEL" \
+            --tools "" \
+            --disallowedTools "mcp__*" \
+            --max-turns 3 \
+            --no-session-persistence \
+            --output-format json \
+            --json-schema "$(cat "$GITHUB_WORKSPACE/core/scripts/agent/review_schema.json")" \
+            > "$GITHUB_WORKSPACE/claude-output.json"
+          echo "claude terminó con código $?"
+          jq '{subtype, is_error, num_turns, total_cost_usd}' "$GITHUB_WORKSPACE/claude-output.json" || true
+
+      - name: Guardar la respuesta
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: review-${{ github.event.pull_request.number }}-${{ github.run_attempt }}
+          path: |
+            claude-output.json
+            ficheros.txt
+          retention-days: 30
+
+  publish:
+    needs: analyze
+    if: always() && needs.analyze.result != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Scripts de core
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: acbacb77/poc-almagentic-core
+          ref: ${{ inputs.core-ref }}
+          path: core
+          persist-credentials: false
+
+      - name: Descargar la respuesta
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        continue-on-error: true
+        with:
+          name: review-${{ github.event.pull_request.number }}-${{ github.run_attempt }}
+
+      - name: Validar y publicar
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          touch ficheros.txt
+          cd core/scripts/agent
+          python3 publish_review.py "$GITHUB_WORKSPACE/claude-output.json" "$REPO" "$PR" "$HEAD" "$GITHUB_WORKSPACE/ficheros.txt"

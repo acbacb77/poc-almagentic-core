@@ -1,0 +1,222 @@
+# Agente que atiende "@claude" en un PR (tarea 8).
+#
+#   work    → Claude Code trabaja en la rama del PR con el harness del repo (permisos,
+#             hook y sandbox). No tiene ningún token de GitHub: no puede hacer push.
+#             Entrega su cambio como un parche.
+#   publish → con un token de una hora de la GitHub App del agente, un script aplica
+#             el parche, rechaza cambios en lo que gobierna al agente o ficheros
+#             generados, hace commit como el bot y lo sube a la rama del PR.
+# Quién puede pedirlo lo decide el workflow que llama (solo usuarios con escritura).
+name: reusable-agent-respond
+
+on:
+  workflow_call:
+    inputs:
+      pr-number:
+        description: Número del PR
+        type: number
+        required: true
+      agent-app-id:
+        description: ID de la GitHub App del agente
+        type: string
+        required: true
+      agent-login:
+        description: Identidad del agente en GitHub
+        type: string
+        default: almagentic-agent[bot]
+      core-ref:
+        description: Versión de poc-almagentic-core con el prompt y los scripts
+        type: string
+        default: v1
+      model:
+        description: Modelo de Claude
+        type: string
+        default: sonnet
+      max-turns:
+        description: Turnos máximos del agente
+        type: number
+        default: 30
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: true
+      AGENT_APP_PRIVATE_KEY:
+        required: true
+
+permissions: {}
+
+env:
+  CLAUDE_CODE_VERSION: "2.1.296"
+
+jobs:
+  work:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      head-ref: ${{ steps.pr.outputs.head-ref }}
+      head-sha: ${{ steps.pr.outputs.head-sha }}
+    steps:
+      - name: Datos del PR
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ inputs.pr-number }}
+        run: |
+          gh pr view "$PR" --repo "$REPO" --json title,body,headRefName,headRefOid,isCrossRepository,baseRefName > pr.json
+          if [ "$(jq -r .isCrossRepository pr.json)" = "true" ]; then echo "PR desde un fork: el agente no trabaja en él"; exit 1; fi
+          ref=$(jq -r .headRefName pr.json)
+          case "$ref" in main|master) echo "La rama del PR es $ref: el agente no trabaja en ella"; exit 1;; esac
+          echo "head-ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "head-sha=$(jq -r .headRefOid pr.json)" >> "$GITHUB_OUTPUT"
+          jq '{author: .comment.user.login, body: .comment.body}' "$GITHUB_EVENT_PATH" > comentario.json
+
+      - name: Código del PR
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.pr.outputs.head-sha }}
+          path: app
+          persist-credentials: false
+
+      - name: Prompt y scripts de core
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: acbacb77/poc-almagentic-core
+          ref: ${{ inputs.core-ref }}
+          path: core
+          persist-credentials: false
+
+      - name: Preparar el prompt
+        run: |
+          cd core/scripts/agent
+          python3 respond_prompt.py ../../prompts/respond.md "$GITHUB_WORKSPACE/comentario.json" "$GITHUB_WORKSPACE/pr.json" > "$GITHUB_WORKSPACE/prompt.md"
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - name: Claude Code y dependencias del sandbox
+        run: |
+          npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+          sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap socat
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+
+      - name: Dependencias de la aplicación
+        working-directory: app
+        run: uv sync --frozen
+
+      - name: Atender la petición (harness del repo, sin token de GitHub)
+        working-directory: app
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          MODEL: ${{ inputs.model }}
+          MAX_TURNS: ${{ inputs.max-turns }}
+        run: |
+          set +e
+          claude -p "$(cat "$GITHUB_WORKSPACE/prompt.md")" \
+            --model "$MODEL" \
+            --max-turns "$MAX_TURNS" \
+            --permission-mode acceptEdits \
+            --disallowedTools "mcp__*" \
+            --no-session-persistence \
+            --output-format json \
+            > "$GITHUB_WORKSPACE/claude-output.json"
+          echo "claude terminó con código $?"
+          jq '{subtype, is_error, num_turns, total_cost_usd}' "$GITHUB_WORKSPACE/claude-output.json" || true
+
+      - name: Empaquetar el cambio como parche
+        env:
+          HEAD_SHA: ${{ steps.pr.outputs.head-sha }}
+        run: |
+          git -C app add -A
+          git -C app diff --cached --binary "$HEAD_SHA" > cambio.patch
+          echo "Ficheros cambiados:"; git -C app diff --cached --name-only "$HEAD_SHA"
+
+      - name: Guardar el resultado
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: respond-${{ inputs.pr-number }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            cambio.patch
+            claude-output.json
+          retention-days: 30
+
+  publish:
+    needs: work
+    if: always() && needs.work.result != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: {}
+    steps:
+      - name: Token de una hora de la App del agente
+        id: token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ inputs.agent-app-id }}
+          private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+
+      - name: Scripts de core
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: acbacb77/poc-almagentic-core
+          ref: ${{ inputs.core-ref }}
+          path: core
+          persist-credentials: false
+
+      - name: Descargar el resultado
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        continue-on-error: true
+        with:
+          name: respond-${{ inputs.pr-number }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Rama del PR con la identidad del agente
+        if: needs.work.result == 'success'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.work.outputs.head-ref }}
+          path: app
+          fetch-depth: 0
+          token: ${{ steps.token.outputs.token }}
+
+      - name: Revisar, subir y responder
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ inputs.pr-number }}
+          WORK_RESULT: ${{ needs.work.result }}
+          HEAD_REF: ${{ needs.work.outputs.head-ref }}
+          HEAD_SHA: ${{ needs.work.outputs.head-sha }}
+          AGENT: ${{ inputs.agent-login }}
+          REQUESTER: ${{ github.event.comment.user.login }}
+          COMMENT_URL: ${{ github.event.comment.html_url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          W="$GITHUB_WORKSPACE"
+          report() { python3 "$W/core/scripts/agent/respond_report.py" "$@" > "$W/respuesta.md"; gh pr comment "$PR" --repo "$REPO" --body-file "$W/respuesta.md"; }
+          touch "$W/claude-output.json"
+          if [ "$WORK_RESULT" != "success" ] || [ ! -f "$W/cambio.patch" ]; then report failed "$W/claude-output.json" --run "$RUN_URL"; exit 1; fi
+          if [ ! -s "$W/cambio.patch" ]; then report no_changes "$W/claude-output.json"; exit 0; fi
+          cd "$W/app"
+          if [ "$(git rev-parse HEAD)" != "$HEAD_SHA" ] || ! git apply --index "$W/cambio.patch"; then
+            report failed "$W/claude-output.json" --run "$RUN_URL"; exit 1
+          fi
+          id=$(gh api "/users/$(jq -rn --arg a "$AGENT" '$a|@uri')" --jq .id)
+          git -c user.name="$AGENT" -c user.email="${id}+${AGENT}@users.noreply.github.com" \
+            commit -q -m "chore(agent): cambio pedido en el PR #${PR}" -m "Pedido por ${REQUESTER} en ${COMMENT_URL}"
+          if ! python3 "$W/core/scripts/security/check_pr_files.py" HEAD~1 HEAD --agent "$AGENT" --pr-author "$AGENT" > "$W/problemas.txt"; then
+            sed -n 's/^::error file=\([^:]*\)::\(.*\)$/\1: \2/p' "$W/problemas.txt" > "$W/problemas-legibles.txt"
+            report rejected "$W/claude-output.json" --problems "$W/problemas-legibles.txt"; exit 1
+          fi
+          git push origin "HEAD:refs/heads/${HEAD_REF}"
+          report pushed "$W/claude-output.json" --commit "$(git rev-parse HEAD)"
