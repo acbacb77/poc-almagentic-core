@@ -1,0 +1,325 @@
+# Agente autónomo de features (extensión F).
+#
+#   phase=spec       la etiqueta `aprobado` en un issue → el agente escribe la spec con
+#                    Spec Kit → PR `spec/<issue>-<slug>` con `Refs #issue`.
+#   phase=implement  el merge de un PR `spec/<issue>-<slug>` → plan, tareas e
+#                    implementación → PR `feat/<issue>-<slug>` con `Closes #issue`.
+#
+#   work    → comprueba que el agente puede empezar y ejecuta Claude Code en una copia
+#             de main con el harness del repo (permisos, hook y sandbox con red limitada).
+#             No tiene ningún token de GitHub: entrega su cambio como un parche.
+#   publish → con un token de una hora de la GitHub App del agente, un script aplica el
+#             parche, rechaza lo que no corresponde a la fase o gobierna al agente, hace
+#             commit como el bot, sube la rama, abre el PR y lo anuncia en el issue.
+name: reusable-agent-feature
+
+on:
+  workflow_call:
+    inputs:
+      phase:
+        description: "spec o implement"
+        type: string
+        required: true
+      issue-number:
+        description: Issue aprobado (fase spec)
+        type: number
+        default: 0
+      spec-branch:
+        description: Rama del PR de spec fusionado (fase implement)
+        type: string
+        default: ""
+      agent-app-id:
+        description: ID de la GitHub App del agente
+        type: string
+        required: true
+      agent-login:
+        description: Identidad del agente en GitHub
+        type: string
+        default: almagentic-agent[bot]
+      core-ref:
+        description: Versión de poc-almagentic-core con los prompts y los scripts
+        type: string
+        default: v1
+      model:
+        description: Modelo de Claude
+        type: string
+        default: sonnet
+      max-turns-spec:
+        type: number
+        default: 40
+      max-turns-implement:
+        type: number
+        default: 150
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: true
+      AGENT_APP_PRIVATE_KEY:
+        required: true
+
+permissions: {}
+
+env:
+  CLAUDE_CODE_VERSION: "2.1.296"
+
+jobs:
+  work:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    outputs:
+      allowed: ${{ steps.check.outputs.allowed }}
+      issue: ${{ steps.issue.outputs.number }}
+      base-sha: ${{ steps.base.outputs.sha }}
+    steps:
+      - name: Prompts y scripts de core
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: acbacb77/poc-almagentic-core
+          ref: ${{ inputs.core-ref }}
+          path: core
+          persist-credentials: false
+
+      - name: Issue
+        id: issue
+        env:
+          PHASE: ${{ inputs.phase }}
+          ISSUE: ${{ inputs.issue-number }}
+          SPEC_BRANCH: ${{ inputs.spec-branch }}
+        run: |
+          case "$PHASE" in
+            spec) n="$ISSUE" ;;
+            implement)
+              python3 core/scripts/agent/feature.py names implement "$SPEC_BRANCH" > nombres.env
+              n=$(sed -n 's/^issue=//p' nombres.env) ;;
+            *) echo "Fase desconocida: $PHASE"; exit 1 ;;
+          esac
+          [[ "$n" =~ ^[1-9][0-9]*$ ]] || { echo "Issue no válido: $n"; exit 1; }
+          echo "number=$n" >> "$GITHUB_OUTPUT"
+
+      - name: ¿Puede empezar el agente?
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PHASE: ${{ inputs.phase }}
+          N: ${{ steps.issue.outputs.number }}
+          SENDER: ${{ github.event.sender.login }}
+        run: |
+          gh api "repos/$REPO/issues/$N" > issue.json
+          gh api --paginate "repos/$REPO/issues/$N/comments" \
+            --jq '[.[] | {author: .user.login, association: .author_association, body: .body}]' | jq -s 'add // []' > comentarios.json
+          permiso=$(gh api "repos/$REPO/collaborators/$(jq -rn --arg u "$SENDER" '$u|@uri')/permission" --jq .permission || echo none)
+          gh api --paginate "repos/$REPO/branches" --jq '[.[].name]' | jq -s 'add // []' > ramas.json
+          if python3 core/scripts/agent/feature.py check "$PHASE" issue.json "$permiso" ramas.json > motivo.txt; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "allowed=false" >> "$GITHUB_OUTPUT"; echo "No empieza: $(cat motivo.txt)"
+          fi
+
+      - name: Código de main
+        if: steps.check.outputs.allowed == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: app
+          persist-credentials: false
+
+      - name: Base y carpeta de la spec
+        id: base
+        if: steps.check.outputs.allowed == 'true'
+        env:
+          PHASE: ${{ inputs.phase }}
+        run: |
+          echo "sha=$(git -C app rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          # Estado local de Spec Kit y caché de uv: nunca entran en el parche.
+          printf '.specify/feature.json\n.uv-cache/\n' >> app/.git/info/exclude
+          spec_dir=""
+          if [ "$PHASE" = implement ]; then
+            slug=$(sed -n 's/^slug=//p' nombres.env)
+            dirs=(app/specs/[0-9][0-9][0-9]-"$slug")
+            [ "${#dirs[@]}" -eq 1 ] && [ -f "${dirs[0]}/spec.md" ] || { echo "No encuentro una única spec para $slug"; exit 1; }
+            spec_dir="${dirs[0]#app/}"
+          fi
+          echo "spec-dir=$spec_dir" >> "$GITHUB_OUTPUT"
+          echo "$spec_dir" > spec-dir.txt
+
+      - name: Preparar el prompt (issue y comentarios como datos)
+        if: steps.check.outputs.allowed == 'true'
+        env:
+          PHASE: ${{ inputs.phase }}
+          SPEC_DIR: ${{ steps.base.outputs.spec-dir }}
+        run: |
+          cd core/scripts/agent
+          python3 feature.py prompt "$PHASE" "../../prompts/feature-$PHASE.md" "$GITHUB_WORKSPACE/issue.json" \
+            "$GITHUB_WORKSPACE/comentarios.json" --spec-dir "$SPEC_DIR" > "$GITHUB_WORKSPACE/prompt.md"
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        if: steps.check.outputs.allowed == 'true'
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.check.outputs.allowed == 'true'
+        with:
+          node-version: 22
+
+      - name: Claude Code y dependencias del sandbox
+        if: steps.check.outputs.allowed == 'true'
+        run: |
+          npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+          sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap socat
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+
+      - name: Dependencias de la aplicación
+        if: steps.check.outputs.allowed == 'true'
+        working-directory: app
+        env:
+          UV_CACHE_DIR: ${{ github.workspace }}/app/.uv-cache
+        run: uv sync --frozen
+
+      - name: Trabajar en la feature (harness del repo, sin token de GitHub)
+        if: steps.check.outputs.allowed == 'true'
+        working-directory: app
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          MODEL: ${{ inputs.model }}
+          MAX_TURNS: ${{ inputs.phase == 'spec' && inputs.max-turns-spec || inputs.max-turns-implement }}
+          UV_CACHE_DIR: ${{ github.workspace }}/app/.uv-cache
+          SPECIFY_FEATURE_DIRECTORY: ${{ steps.base.outputs.spec-dir }}
+          SPECIFY_FEATURE_NO_PERSIST: "1"
+        run: |
+          [ -n "$SPECIFY_FEATURE_DIRECTORY" ] || unset SPECIFY_FEATURE_DIRECTORY
+          set +e
+          claude -p "$(cat "$GITHUB_WORKSPACE/prompt.md")" \
+            --model "$MODEL" \
+            --max-turns "$MAX_TURNS" \
+            --permission-mode acceptEdits \
+            --disallowedTools "mcp__*" \
+            --no-session-persistence \
+            --output-format json \
+            > "$GITHUB_WORKSPACE/claude-output.json"
+          echo "claude terminó con código $?"
+          jq '{subtype, is_error, num_turns, total_cost_usd}' "$GITHUB_WORKSPACE/claude-output.json" || true
+
+      - name: Empaquetar el cambio como parche
+        if: steps.check.outputs.allowed == 'true'
+        env:
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+        run: |
+          git -C app add -A
+          git -C app diff --cached --binary "$BASE_SHA" > cambio.patch
+          git -C app diff --cached --name-only "$BASE_SHA" > ficheros.txt
+          echo "Ficheros cambiados:"; cat ficheros.txt
+
+      - name: Guardar el resultado
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: feature-${{ inputs.phase }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            motivo.txt
+            issue.json
+            spec-dir.txt
+            cambio.patch
+            ficheros.txt
+            claude-output.json
+          retention-days: 30
+          if-no-files-found: ignore
+
+  publish:
+    needs: work
+    if: always() && needs.work.result != 'cancelled' && needs.work.outputs.issue != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: {}
+    steps:
+      - name: Token de una hora de la App del agente
+        id: token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ inputs.agent-app-id }}
+          private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+
+      - name: Scripts de core
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: acbacb77/poc-almagentic-core
+          ref: ${{ inputs.core-ref }}
+          path: core
+          persist-credentials: false
+
+      - name: Descargar el resultado
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        continue-on-error: true
+        with:
+          name: feature-${{ inputs.phase }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: main con la identidad del agente
+        if: needs.work.result == 'success' && needs.work.outputs.allowed == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.work.outputs.base-sha }}
+          path: app
+          fetch-depth: 0
+          token: ${{ steps.token.outputs.token }}
+
+      - name: Revisar, subir, abrir el PR y avisar en el issue
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          REPO: ${{ github.repository }}
+          PHASE: ${{ inputs.phase }}
+          SPEC_BRANCH: ${{ inputs.spec-branch }}
+          N: ${{ needs.work.outputs.issue }}
+          ALLOWED: ${{ needs.work.outputs.allowed }}
+          WORK_RESULT: ${{ needs.work.result }}
+          AGENT: ${{ inputs.agent-login }}
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          W="$GITHUB_WORKSPACE"; F="$W/core/scripts/agent/feature.py"
+          touch "$W/claude-output.json"
+          report() { python3 "$F" report "$@" > "$W/aviso.md"; gh issue comment "$N" --repo "$REPO" --body-file "$W/aviso.md"; }
+          if [ "$ALLOWED" = false ]; then report refused "$W/claude-output.json" --reason "$(cat "$W/motivo.txt" 2>/dev/null)"; exit 0; fi
+          if [ "$WORK_RESULT" != success ] || [ ! -f "$W/cambio.patch" ]; then report failed "$W/claude-output.json" --run "$RUN_URL"; exit 1; fi
+          if [ ! -s "$W/cambio.patch" ]; then report no_changes "$W/claude-output.json"; exit 0; fi
+
+          # Rama y carpeta de la spec: las decide el script, no el modelo.
+          if [ "$PHASE" = spec ]; then
+            if ! python3 "$F" names spec "$N" "$W/ficheros.txt" > "$W/nombres.env" 2> "$W/error.txt"; then
+              report rejected "$W/claude-output.json" --reason "$(tail -1 "$W/error.txt")" --run "$RUN_URL"; exit 1
+            fi
+          else
+            python3 "$F" names implement "$SPEC_BRANCH" > "$W/nombres.env"
+            echo "spec-dir=$(cat "$W/spec-dir.txt")" >> "$W/nombres.env"
+          fi
+          BRANCH=$(sed -n 's/^branch=//p' "$W/nombres.env"); SPEC_DIR=$(sed -n 's/^spec-dir=//p' "$W/nombres.env")
+
+          if ! python3 "$F" scope "$PHASE" "$W/ficheros.txt" > "$W/fuera.txt"; then
+            report rejected "$W/claude-output.json" --problems "$W/fuera.txt" --run "$RUN_URL"; exit 1
+          fi
+
+          cd "$W/app"
+          git switch -q -c "$BRANCH"
+          git apply --index "$W/cambio.patch" || { report failed "$W/claude-output.json" --reason "el parche no se aplica sobre main" --run "$RUN_URL"; exit 1; }
+          id=$(gh api "/users/$(jq -rn --arg a "$AGENT" '$a|@uri')" --jq .id)
+          if [ "$PHASE" = spec ]; then msg="docs(spec): especificación de la petición #$N"; else msg="feat: implementación de la petición #$N"; fi
+          git -c user.name="$AGENT" -c user.email="${id}+${AGENT}@users.noreply.github.com" \
+            commit -q -m "$msg" -m "Refs #$N"
+          if ! python3 "$W/core/scripts/security/check_pr_files.py" HEAD~1 HEAD --agent "$AGENT" --pr-author "$AGENT" > "$W/problemas.txt"; then
+            sed -n 's/^::error file=\([^:]*\)::\(.*\)$/\1: \2/p' "$W/problemas.txt" > "$W/problemas-legibles.txt"
+            report rejected "$W/claude-output.json" --problems "$W/problemas-legibles.txt" --run "$RUN_URL"; exit 1
+          fi
+          git push -q origin "HEAD:refs/heads/$BRANCH"
+
+          python3 "$F" pr "$PHASE" "$N" "$(jq -r .title "$W/issue.json")" "$W/claude-output.json" "$SPEC_DIR" \
+            --title-file "$W/titulo.txt" --body-file "$W/cuerpo.md"
+          url=$(gh pr create --repo "$REPO" --base "$BASE_BRANCH" --head "$BRANCH" \
+            --title "$(cat "$W/titulo.txt")" --body-file "$W/cuerpo.md")
+          report opened "$W/claude-output.json" --pr "$url"
