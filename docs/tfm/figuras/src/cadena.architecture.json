@@ -1,0 +1,254 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Cadena de suministro de la imagen",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "external": {
+          "label": "Persona o entrada"
+        },
+        "backend": {
+          "label": "Agente o proceso"
+        },
+        "security": {
+          "label": "Control o aprobación"
+        },
+        "frontend": {
+          "label": "Artefacto en GitHub"
+        },
+        "database": {
+          "label": "Estado en git"
+        },
+        "messagebus": {
+          "label": "Bot de promoción"
+        },
+        "cloud": {
+          "label": "Clúster"
+        }
+      }
+    }
+  },
+  "components": [
+    {
+      "id": "dockerfile",
+      "type": "external",
+      "label": "Dockerfile",
+      "sublabel": "bases por digest",
+      "pos": [
+        40,
+        50
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "construir",
+      "type": "backend",
+      "label": "Construir",
+      "sublabel": "uv.lock, sin root",
+      "pos": [
+        40,
+        190
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "prueba",
+      "type": "security",
+      "label": "Prueba de humo",
+      "sublabel": "solo lectura, logs",
+      "pos": [
+        260,
+        190
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "sbom",
+      "type": "frontend",
+      "label": "SBOM",
+      "sublabel": "syft, SPDX",
+      "pos": [
+        480,
+        190
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "ghcr",
+      "type": "frontend",
+      "label": "GHCR",
+      "sublabel": "sha-commit y main",
+      "pos": [
+        480,
+        330
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "firma",
+      "type": "security",
+      "label": "Firma cosign",
+      "sublabel": "Sigstore, Rekor",
+      "pos": [
+        260,
+        330
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "atest",
+      "type": "security",
+      "label": "Atestaciones",
+      "sublabel": "SLSA y SBOM",
+      "pos": [
+        40,
+        330
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "verif",
+      "type": "security",
+      "label": "Verificación",
+      "sublabel": "firmante = core",
+      "pos": [
+        40,
+        470
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "argo",
+      "type": "cloud",
+      "label": "Despliegue",
+      "sublabel": "por digest, tarea 10",
+      "pos": [
+        260,
+        470
+      ],
+      "size": [
+        140,
+        56
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Repo app",
+      "wraps": [
+        "dockerfile"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Job build",
+      "wraps": [
+        "construir",
+        "prueba",
+        "sbom"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Job publish",
+      "wraps": [
+        "ghcr",
+        "firma",
+        "atest"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Consumo",
+      "wraps": [
+        "verif",
+        "argo"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "e1",
+      "from": "dockerfile",
+      "to": "construir",
+      "label": "PR y main",
+      "labelAt": [
+        110,
+        148
+      ]
+    },
+    {
+      "id": "e2",
+      "from": "construir",
+      "to": "prueba"
+    },
+    {
+      "id": "e3",
+      "from": "prueba",
+      "to": "sbom"
+    },
+    {
+      "id": "e4",
+      "from": "sbom",
+      "to": "ghcr",
+      "label": "solo en main",
+      "labelAt": [
+        550,
+        288
+      ]
+    },
+    {
+      "id": "e5",
+      "from": "ghcr",
+      "to": "firma"
+    },
+    {
+      "id": "e6",
+      "from": "firma",
+      "to": "atest"
+    },
+    {
+      "id": "e7",
+      "from": "atest",
+      "to": "verif",
+      "labelAt": [
+        110,
+        428
+      ],
+      "label": "se comprueba"
+    },
+    {
+      "id": "e8",
+      "from": "verif",
+      "to": "argo"
+    }
+  ]
+}

@@ -2,7 +2,7 @@
 
 Los agentes de IA actuales planifican, escriben código, ejecutan herramientas y abren *pull requests*. Con ellos, el ingeniero deja de ejecutar cada fase del ciclo de vida del software y pasa a definir la intención y a supervisar y validar el trabajo de los agentes. Se gana velocidad, pero aparecen riesgos nuevos. Un agente con permisos de escritura que lee texto no confiable (issues, comentarios, páginas web) puede ser manipulado mediante *prompt injection*, heredar las credenciales de una persona o modificar los controles que deberían vigilarlo.
 
-Este Trabajo Fin de Máster diseña y construye una prueba de concepto (POC) de ALM agéntico: un ciclo de vida de aplicaciones completo, desde que entra una petición hasta que se retira una versión de la API, en el que agentes basados en modelos de lenguaje (Claude) hacen el trabajo y las personas conservan las decisiones importantes. La solución tiene cuatro piezas. Hay tres repositorios con responsabilidades separadas (aplicación, plataforma y GitOps) y dos identidades no humanas de mínimo privilegio (GitHub Apps con tokens de una hora). El agente de código trabaja dentro de un *harness* de siete capas de defensa. Y el triage sigue un patrón que separa pensar de actuar: el modelo propone sin herramientas ni permisos, y un script determinista valida la propuesta y la aplica. El mismo patrón se usa en los PRs, donde un segundo agente revisa cada cambio contra la especificación y un colaborador puede pedir correcciones al agente de código con un comentario `@claude`. Por último, la aprobación de una petición y el merge de su especificación lanzan al agente sin que nadie le escriba un prompt; en la prueba, una feature completa pasó de petición a cierre en 25 minutos.
+Este Trabajo Fin de Máster diseña y construye una prueba de concepto (POC) de ALM agéntico: un ciclo de vida de aplicaciones completo, desde que entra una petición hasta que se retira una versión de la API, en el que agentes basados en modelos de lenguaje (Claude) hacen el trabajo y las personas conservan las decisiones importantes. La solución tiene cuatro piezas. Hay tres repositorios con responsabilidades separadas (aplicación, plataforma y GitOps) y dos identidades no humanas de mínimo privilegio (GitHub Apps con tokens de una hora). El agente de código trabaja dentro de un *harness* de siete capas de defensa. Y el triage sigue un patrón que separa pensar de actuar: el modelo propone sin herramientas ni permisos, y un script determinista valida la propuesta y la aplica. El mismo patrón se usa en los PRs, donde un segundo agente revisa cada cambio contra la especificación y un colaborador puede pedir correcciones al agente de código con un comentario `@claude`. Por último, la aprobación de una petición y el merge de su especificación lanzan al agente sin que nadie le escriba un prompt; en la prueba, una feature completa pasó de petición a cierre en 25 minutos. La imagen resultante sale probada, firmada y con su procedencia y su SBOM verificables, y los commits del agente salen firmados por GitHub.
 
 El documento recoge el problema, el estado del arte, las decisiones de diseño con sus alternativas, la implementación, el registro completo de iteraciones con los modelos y los resultados de las pruebas. Entre esas pruebas hay un intento de *prompt injection* que el sistema detecta y neutraliza. La documentación técnica permite reproducir la POC desde cero.
 
@@ -516,7 +516,7 @@ El cambio del agente tiene dos partes. Añade un middleware que pone `no-store` 
 
 El revisor comentó el commit del agente con cuatro hallazgos. La descripción del PR ya no correspondía al diff, y se corrigió. El cambio de un test existente no se mencionaba. El prefijo `/api/` es más amplio que el catálogo, y el test depende de un producto concreto del catálogo real; estos dos quedan como mejora. Después el responsable fusionó app#16.
 
-La prueba enseña algo que no se había visto en las tareas anteriores: el agente trabaja sin que nadie abra el devcontainer, su cambio queda asociado a su identidad, pasa las mismas comprobaciones que el de una persona y otro modelo lo revisa antes de que alguien decida. También deja una advertencia. Para que su cambio pasara, el agente modificó un test existente. Esta vez tenía motivo y lo declaró, y el revisor lo señaló, pero es el tipo de cambio que una persona tiene que mirar. Por último, el commit aparece como *Unverified* porque no lleva firma criptográfica; la tarea 9 valorará firmarlo.
+La prueba enseña algo que no se había visto en las tareas anteriores: el agente trabaja sin que nadie abra el devcontainer, su cambio queda asociado a su identidad, pasa las mismas comprobaciones que el de una persona y otro modelo lo revisa antes de que alguien decida. También deja una advertencia. Para que su cambio pasara, el agente modificó un test existente. Esta vez tenía motivo y lo declaró, y el revisor lo señaló, pero es el tipo de cambio que una persona tiene que mirar. Por último, el commit no llevaba firma criptográfica, y GitHub lo marcaba como no verificado. La tarea 9 lo resolvió.
 
 ## Extensión F: agente autónomo en Actions
 
@@ -562,9 +562,48 @@ El revisor fue útil en las dos fases. En la spec pidió resolver las dudas ante
 
 Quedaron dos detalles. El título de los PRs arrastraba el prefijo «[Petición]» de la plantilla, y se corrigió en core#15. El agente contó además que veía ficheros como `.bashrc` o `.idea` sin seguimiento en la carpeta de trabajo. Los crea el sandbox para protegerlos mientras dura la sesión y no llegaron al PR.
 
+## Tarea 9: cadena de suministro
+
+Hasta aquí, lo que el agente producía era código en un PR. Para desplegarlo hace falta un artefacto, la imagen de contenedor, y quien la despliegue tiene que poder comprobar de dónde sale. La tarea 9 crea la imagen y la rodea de pruebas verificables: qué contiene (SBOM), quién la construyó (firma) y cómo se construyó (procedencia SLSA).
+
+![Figura 8. Cadena de suministro: la imagen se prueba y se describe en cada PR, y solo en main se publica, se firma y se atestigua.](figuras/cadena.png)
+
+| Pieza | Repositorio | Qué hace |
+|---|---|---|
+| `Dockerfile` y `.dockerignore` | app | Imagen multietapa: dependencias de producción exactas de `uv.lock`, usuario sin privilegios (uid 10001) y solo `src/`. El `.dockerignore` es una lista de lo permitido. Las imágenes base van fijadas por digest |
+| `reusable-supply-chain.yml`, job `build` | core | Solo lectura, en PRs y en main. Exige bases fijadas por digest, construye la imagen y la arranca para probarla (sin root, con el sistema de ficheros en solo lectura y sin el texto de `q` en los logs) y genera el SBOM SPDX con syft |
+| `reusable-supply-chain.yml`, job `publish` | core | Solo en main. Sube la imagen a GHCR, la firma con cosign sin claves, adjunta las atestaciones de procedencia SLSA y de SBOM y verifica las tres contra el workflow de core |
+| `supply-chain.yml` | app | Llama al anterior: en PRs con permisos de lectura, en main con permisos para publicar y firmar |
+| `api_commit.py` | core | Publica los commits del agente por la API de GitHub para que salgan firmados |
+
+La firma no usa claves que haya que guardar. En el job, cosign y la acción de atestaciones piden un certificado a Sigstore con el token OIDC del workflow. Ese certificado dura unos minutos y lleva como identidad el workflow que firma; la firma queda además en Rekor, un registro público de transparencia. Como el workflow vive en core, la identidad es la de core y no la de app: una firma solo es válida si la hizo el pipeline de la plataforma, y ni el repositorio de la aplicación ni el agente pueden producirla. Por la misma razón, `Dockerfile` y `.dockerignore` pasan a la lista de ficheros que el agente no puede tocar: definen lo que se firma.
+
+### Puesta en marcha
+
+Desde la sesión de trabajo no se llega a Docker Hub ni a GHCR, así que el asistente no podía consultar los digests de las imágenes base. Lo resolvió el propio CI. La primera ejecución de app#21 falló a propósito con la anotación «Fija python:3.12-slim-bookworm por digest: …@sha256:34386ef0…», y lo mismo para la imagen de uv. Con los digests fijados, la segunda pasó.
+
+El primer merge en main falló al subir a GHCR. El workflow reutilizable declaraba `permissions: {}` a nivel de workflow, y el job `publish`, que no declara permisos para poder heredar los de quien lo llama, heredó ese bloque vacío. Quitarlo (core#18) y relanzar la ejecución bastó. Para no depender de los logs, que la sesión no puede leer, el job deja ahora una anotación cuando la subida falla.
+
+### Resultado
+
+La imagen quedó publicada como `ghcr.io/acbacb77/poc-almagentic-app@sha256:02e89f6f…`. Además de la verificación que hace el propio workflow, se comprobó por la API de GitHub:
+
+| Comprobación | Resultado |
+|---|---|
+| Atestaciones del digest | Dos: procedencia SLSA v1 (construida desde `supply-chain.yml` en `refs/heads/main` de app) y SBOM SPDX 2.3 |
+| Certificado de firma | Emitido por Sigstore, válido 10 minutos, identidad `…/poc-almagentic-core/.github/workflows/reusable-supply-chain.yml@refs/tags/v1` |
+| Registro de transparencia | Entrada 3226607006 en Rekor |
+| Prueba de humo | La imagen corre sin root y con el sistema de ficheros en solo lectura, y el texto de `q` no aparece en sus logs. Esto confirmó con uvicorn real el filtro que el agente añadió en la extensión F |
+
+### Commits del agente verificados
+
+Los commits del bot salían con `verified: false`. El job `publish` hacía `git commit` con el nombre del bot y `git push` con el token de la App, y el nombre del autor de un commit es texto libre. Ahora el job sigue aplicando el parche y revisando el commit local con `check_pr_files.py`, pero lo publica recreándolo con la mutación `createCommitOnBranch` de la API de GitHub. GitHub firma los commits que una App crea por la API. La mutación recibe el commit esperado de la rama y falla si alguien ha subido algo entretanto, la misma garantía que antes daba la comprobación previa. Los ficheros ejecutables, los enlaces simbólicos y los submódulos no los admite la API, y el script los rechaza con un mensaje claro.
+
+La prueba fue un `@claude` en app#22 que pedía al agente la mejora que había sugerido el revisor en app#16: que el test de `Cache-Control` no dependiera de un producto concreto del catálogo. El commit del agente salió con `verified: true`. Con esto, la cadena queda verificable de punta a punta: el commit del agente lo firma GitHub, la imagen la firma el pipeline de core y la procedencia une los dos.
+
 ## Tareas pendientes
 
-> Las secciones de las tareas 9 a 12 y de las extensiones B a E se añadirán a medida que se implementen: cadena de suministro, despliegue GitOps, *releases*, operación, mantenimiento, retirada y trazabilidad.
+> Las secciones de las tareas 10 a 12 y de las extensiones B a E se añadirán a medida que se implementen: despliegue GitOps, *releases*, operación, mantenimiento, retirada y trazabilidad.
 
 # Iteraciones con modelos, pruebas y resultados
 
@@ -734,6 +773,18 @@ El registro que sigue resume toda la conversación del proyecto. Se han omitido 
 | 77 | «Listo» (spec fusionada) | Revisa app#20: código limpio, ningún test existente tocado, 100 tests en local. Contrasta los hallazgos del revisor: uno acertado (fuga de `q` en el log de acceso) y un falso positivo (Unicode). Redacta el `@claude` para el arreglo | Implementación en revisión |
 | 78 | «Listo» (implementación fusionada) | Comprueba el cierre del issue, quita el prefijo de la plantilla de los títulos (core#15) y cierra la extensión | Extensión F cerrada |
 
+### Fase 14 · Cadena de suministro (12 de octubre)
+
+| # | Petición del autor | Respuesta y acción del modelo | Resultado |
+|---|---|---|---|
+| 79 | «Merged» (core#15 y core#16) | Empieza la tarea 9. Fija por SHA las acciones de syft, cosign y atestaciones; separa `build` (solo lectura) de `publish` (solo main); protege `Dockerfile` frente al agente; escribe el `Dockerfile` y `base_images.py` con 8 tests. Abre core#17 y app#21, avisando de que la primera ejecución fallará porque la sesión no llega a los registros | Tarea 9 preparada |
+| 80 | «Listo» (`v1` movida) | Relanza app#21; el CI falla con los digests en la anotación; los fija y la segunda ejecución pasa, incluida la prueba de humo. Responde a la revisión | Imagen probada en PR |
+| 81 | «Merged, ha fallado el build» | Lee los pasos del job: la subida a GHCR falló. Identifica la causa (`permissions: {}` heredado por `publish`) y abre core#18 con una anotación para futuros fallos | Arreglo listo |
+| 82 | «Listo, ahora sí» | Comprueba por la API las dos atestaciones, el certificado de Sigstore y la entrada en Rekor. Pide revisar la visibilidad del paquete y propone firmar los commits del agente | Imagen publicada y verificada |
+| 83 | «El repo es público; explícame los pasos del unverified y vemos» | Aclara que la visibilidad del paquete es independiente de la del repositorio. Explica por qué el autor de un commit no prueba nada y cómo la API de GitHub firma los commits de una App, con pasos y limitaciones | Decisión del autor |
+| 84 | «El package es público; vamos a lo del unverified» | Escribe `api_commit.py` con 5 tests, cambia los dos jobs `publish` y quita el token de sus checkouts. Abre core#19 y el PR de prueba app#22 | Commits firmados preparados |
+| 85 | «Ha respondido, pero se han saltado 2 checks» | Explica que los checks omitidos son los de publicación, que solo corren en main. Comprueba `verified: true` en el commit del bot y cierra la tarea | Tarea 9 cerrada |
+
 ## Pruebas realizadas y resultados
 
 ### Pruebas automáticas
@@ -743,10 +794,13 @@ El registro que sigue resume toda la conversación del proyecto. Se han omitido 
 | Hook `guard.py` | 45 casos: 21 comandos que deben bloquearse, 10 que deben permitirse, ficheros protegidos, secretos y auditoría | 45/45 superadas |
 | Aplicación: catálogo (`app`) | 103 casos: listado, consulta por id, 404, precio con 2 decimales, orden estable, catálogo mal formado, despliegue de un cambio de precio, observabilidad, `/health`, `Cache-Control: no-store` y búsqueda por nombre (45, escritos por el agente autónomo) | 103/103 superadas |
 | CI obligatorio (app#12) | PR con un `import` sin usar | CI en rojo y merge bloqueado |
-| Gobierno de PRs (`check_pr_files.py`) | 21 casos: ficheros generados, ficheros protegidos según el autor, cambios de dependencias permitidos y configuración de comprobaciones bloqueada | 21/21 superadas |
+| Gobierno de PRs (`check_pr_files.py`) | 23 casos: ficheros generados, ficheros protegidos según el autor, cambios de dependencias permitidos y configuración de comprobaciones bloqueada | 23/23 superadas |
 | Escaneo de seguridad obligatorio (app#14) | PR con un `.pyc` en `__pycache__` | `governance` en rojo y merge bloqueado |
-| Agentes en Actions (`scripts/agent`) | 41 casos. Revisor y respuesta (16): publicación y fallo seguro de la revisión, hallazgos fuera del PR, orden por severidad, neutralización, sospecha de inyección, separación de instrucción y datos en los prompts e informes de respuesta. Agente autónomo (25): comprobaciones previas, prompt con datos, nombres de rama, alcance de la fase spec, textos del PR e informes | 41/41 superadas |
+| Agentes en Actions (`scripts/agent`) | 46 casos. Revisor y respuesta (16): publicación y fallo seguro de la revisión, hallazgos fuera del PR, orden por severidad, neutralización, sospecha de inyección, separación de instrucción y datos en los prompts e informes de respuesta. Agente autónomo (25): comprobaciones previas, prompt con datos, nombres de rama, alcance de la fase spec, textos del PR e informes. Commits por la API (5): altas, cambios y bajas, binarios, rechazo de ejecutables y enlaces, entrada de la mutación | 46/46 superadas |
 | Respuesta a `@claude` (app#16) | PR con tres tests de FR-009 que fallan y un comentario `@claude` | Commit del bot en 73 s, checks en verde, revisión publicada y sin bucle del bot |
+| Imágenes base (`base_images.py`) | 8 casos: etapas, `scratch`, digest incompleto, variables en `FROM`, líneas partidas | 8/8 superadas |
+| Cadena de suministro (app#21 y main) | Imagen sin digest en la base; imagen arrancada con búsqueda; publicación en main | CI en rojo con el digest correcto; prueba de humo superada; imagen firmada con dos atestaciones verificadas |
+| Commit verificado (app#22) | `@claude` en un PR tras el cambio a la API | `verified: true` (`valid`) |
 | Agente autónomo (issue #18) | Petición real con etiqueta `aprobado` | PR de spec en 2 min, PR de implementación en 2 min tras el merge, dos ajustes con `@claude`; issue cerrado en 25 min |
 | Triage (`apply.py`, `build_prompt.py`) | 12 casos: salida estructurada, valores inválidos, etiquetas arbitrarias, referencias falsas, neutralización de texto, sospecha de inyección | 12/12 superadas |
 
@@ -789,21 +843,23 @@ El caso de inyección prueba el diseño en dos niveles. El modelo detectó el in
 | Test antiguo contrario al requisito | La tarea 5 interpretó FR-009 como no enviar cabeceras de caché | El agente cambió el test y lo explicó; el revisor lo señaló | Un agente puede modificar tests existentes para que su cambio pase, y una persona tiene que verlo |
 | Texto de `q` en el log de acceso | uvicorn registra la URL completa | Filtro en el logger `uvicorn.access`, pedido con `@claude` | El revisor encontró un defecto que no vieron ni la spec ni el implementador |
 | Falso positivo del revisor sobre Unicode | El revisor lee el diff como texto | Se comprobaron los bytes | Los hallazgos del revisor se verifican antes de actuar |
+| Digests de las imágenes base | La sesión no llega a Docker Hub ni a GHCR | El CI los resuelve y los devuelve en la anotación del fallo | Un control que falla con la solución en el mensaje ahorra el paso manual |
+| La publicación no podía subir a GHCR | `permissions: {}` a nivel de workflow heredado por el job reutilizable | Quitar el bloque (core#18) | En los workflows reutilizables la herencia de permisos no es la intuitiva; hay que probar en main |
 | Prefijo «[Petición]» en los títulos de los PRs | El script copiaba el título del issue | Se quita el prefijo (core#15) | Los detalles de presentación también salen al usarlo de verdad |
 
 ## Métricas del proceso
 
 | Métrica | Valor |
 |---|---|
-| Tareas completadas | 10 de 18 (1, 2, 3, A, 4, 5, 6, 7, 8 y F) |
-| PRs fusionados | 24 (9 en core y 15 en app; cuatro abiertos por el agente y tres con commits suyos pedidos con `@claude`), más la documentación |
-| Pruebas automáticas | 222 superadas (57 de harness y triage, 21 de gobierno de PRs, 41 de los agentes en Actions, 103 de la aplicación) |
-| Iteraciones registradas con el asistente | 78 |
+| Tareas completadas | 11 de 18 (1, 2, 3, A, 4, 5, 6, 7, 8, F y 9) |
+| PRs fusionados | 29 (12 en core y 17 en app; cuatro abiertos por el agente y cuatro con commits suyos pedidos con `@claude`), más la documentación |
+| Pruebas automáticas | 237 superadas (57 de harness y triage, 23 de gobierno de PRs, 46 de los agentes en Actions, 8 de la cadena de suministro, 103 de la aplicación) |
+| Iteraciones registradas con el asistente | 85 |
 | Tiempo de una feature con el agente autónomo | 25 minutos de la petición al cierre (issue #18), con cuatro decisiones humanas |
-| Problemas de entorno resueltos | 15 |
+| Problemas de entorno resueltos | 17 |
 | Vulnerabilidades de diseño detectadas antes de explotarse | 2 (aprobación imposible sin identidad propia; herencia de credenciales) |
 
-> Este capítulo se ampliará con las iteraciones y pruebas de las tareas 9 a 12 y B a E.
+> Este capítulo se ampliará con las iteraciones y pruebas de las tareas 10 a 12 y B a E.
 
 # Documentación técnica reproducible
 
@@ -932,7 +988,25 @@ Para ejecutar los tests de los scripts en local, desde el repo core:
 4. Poner la etiqueta `aprobado`. En unos minutos el bot abre el PR de la spec y lo anuncia en el issue. Si hay dudas, pedir los cambios con `@claude` en el PR; después aprobar y fusionar.
 5. El merge de la spec lanza la implementación. Revisar el PR `feat/…`, pedir ajustes con `@claude` si hace falta, aprobar y fusionar; el issue se cierra solo.
 
-> Los pasos de las tareas 9 a 12 y B a E se añadirán al completarlas.
+### Tarea 9. Cadena de suministro
+
+1. En core: añadir `reusable-supply-chain.yml` y `scripts/supply-chain/`, y `Dockerfile` y `.dockerignore` a la lista protegida de `check_pr_files.py`. Fusionar y mover `v1`.
+2. En app: añadir `Dockerfile`, `.dockerignore` y `.github/workflows/supply-chain.yml`. Si las imágenes base no llevan digest, el primer CI falla y su anotación indica el valor exacto: copiarlo en cada `FROM` y volver a subir.
+3. En app: fusionar. El job `release / publish` sube la imagen a GHCR, la firma y adjunta las atestaciones.
+4. En el perfil de GitHub: *Packages* → `poc-almagentic-app` → *Package settings*; si es privado, cambiarlo a público para que el clúster pueda descargarlo sin credenciales.
+5. En core: añadir `scripts/agent/api_commit.py` y usarlo en los jobs `publish` de los agentes. Fusionar y mover `v1`.
+
+Para verificar la imagen desde WSL:
+
+```
+gh attestation verify oci://ghcr.io/acbacb77/poc-almagentic-app:main --owner acbacb77 \
+  --signer-workflow acbacb77/poc-almagentic-core/.github/workflows/reusable-supply-chain.yml
+cosign verify ghcr.io/acbacb77/poc-almagentic-app:main \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp '^https://github.com/acbacb77/poc-almagentic-core/\.github/workflows/reusable-supply-chain\.yml@'
+```
+
+> Los pasos de las tareas 10 a 12 y B a E se añadirán al completarlas.
 
 ## Estructura de los repositorios
 
@@ -973,6 +1047,8 @@ poc-almagentic-gitops/
 | `@claude` no hace nada | Comprobar que `agent-respond.yml` está en `main` de app y que el comentario está en un PR (no en un issue) y lo escribe un colaborador |
 | El agente comenta que no ha podido completar la petición | La rama cambió mientras trabajaba o el modelo falló; revisar la ejecución enlazada en el comentario y volver a pedirlo |
 | Al poner `aprobado` el bot comenta «El agente no ha empezado» | Leer el motivo: falta permiso de escritura, el issue tiene `triage:sospechoso` o ya existe la rama `spec/<issue>-…` |
+| `image / build` falla en «Imágenes base fijadas por digest» | Copiar en el `FROM` el digest que trae la anotación |
+| `release / publish` no puede subir a GHCR | El job que llama debe conceder `packages: write`, y el workflow reutilizable no puede declarar `permissions` a nivel de workflow |
 | El merge de la spec no lanza la implementación | La rama del PR debe empezar por `spec/<issue>-` y venir del mismo repositorio |
 
 # Conclusiones y trabajo futuro
@@ -986,6 +1062,7 @@ poc-almagentic-gitops/
 5. La revisión humana sigue encontrando problemas que el modelo no ve. Varios de los más relevantes los detectó el autor (ficheros generados, estructura de la documentación) o solo aparecieron en su entorno real.
 6. El patrón de pensar y actuar por separado sirve también para un agente que escribe código. En la respuesta a `@claude` el modelo cambia ficheros pero no puede publicarlos; un script sin modelo decide si el cambio se sube. Al pedirle que hiciera pasar unos tests, el agente modificó un test existente. Tenía motivo y lo declaró, pero ese es el tipo de cambio que debe revisar una persona.
 7. Con el agente lanzado por las decisiones humanas que ya existían, una feature pequeña pasó de petición a cierre en 25 minutos sin escribir ningún prompt. La persona no desaparece del ciclo: aprobó la petición, resolvió las dudas, revisó dos PRs y corrigió un fallo que el revisor señaló. Lo que desaparece es el trabajo de intermediario entre el issue y el agente.
+8. La confianza en el resultado no depende de confiar en el agente. Su commit lo firma GitHub a nombre de la App, la imagen la firma el pipeline de la plataforma y la procedencia une los dos, todo comprobable por cualquiera con herramientas públicas. El agente puede escribir código, pero no puede producir ninguna de esas firmas.
 
 ## Trabajo futuro
 
