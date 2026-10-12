@@ -129,12 +129,16 @@ TASKS = [
                ("Fusionar core#14 y app#17, mover v1 (y crear v1.4.0)", "usuario", True, []),
                ("Prueba real: petición #18 → spec (app#19) → implementación (app#20)", "usuario", True, [issue(18, "búsqueda por nombre"), pr("app", 19), pr("app", 20)]),
                ("Título del PR sin el prefijo de la plantilla", "claude", True, [pr("core", 15)])]),
-    dict(id="9", title="Supply chain", phase="Entrega", status="next",
-         desc="SBOM, firma de la imagen y provenance.",
-         prereqs=[],
-         subs=[("SBOM, firma y atestación de la imagen", "claude", False, []),
-               ("Fusionar y etiqueta de core", "usuario", False, [])]),
-    dict(id="10", title="Deploy GitOps con gate humano", phase="Entrega", status="todo",
+    dict(id="9", title="Supply chain", phase="Entrega", status="done",
+         desc="Imagen de la API probada, con SBOM, firmada con cosign y con atestaciones de procedencia SLSA y de SBOM verificadas contra el workflow de core. Los commits del agente salen verificados.",
+         prereqs=[("Paquete poc-almagentic-app público en GHCR", True)],
+         subs=[("Workflow reutilizable: bases por digest, build, prueba de humo y SBOM; en main, GHCR, cosign y atestaciones", "claude", True, [pr("core", 17)]),
+               ("Dockerfile multietapa sin root y .dockerignore; el agente no puede tocarlos", "claude", True, [pr("app", 21)]),
+               ("Fijar las imágenes base con los digests que dio el CI", "claude", True, [pr("app", 21)]),
+               ("Arreglo: publish heredaba permissions: {} y no podía subir a GHCR", "claude", True, [pr("core", 18)]),
+               ("Commits del agente por la API de GitHub (Verified)", "claude", True, [pr("core", 19), pr("app", 22)]),
+               ("Fusionar, mover v1 (v1.5.0, v1.5.1, v1.6.0) y relanzar la publicación", "usuario", True, [])]),
+    dict(id="10", title="Deploy GitOps con gate humano", phase="Entrega", status="next",
          desc="El bot promotor abre un PR en gitops; tu merge despliega con Argo CD en el cluster local.",
          prereqs=[("Kubernetes activado en Docker Desktop con 8 GB", False),
                   ("Argo CD instalado y bootstrap/root-app.yaml aplicado", False),
@@ -284,6 +288,11 @@ DETAILS = {
 **Prueba** (app#16): un test exigía `Cache-Control: no-store`. El comentario `@claude haz que pasen los tests de test_cache.py` produjo en ~75 s un commit del bot con un middleware y el ajuste de un test antiguo que contradecía FR-009; CI, seguridad y revisor pasaron, y el comentario del propio bot no volvió a lanzar al agente.
 
 **Problema típico**: si `@claude` no hace nada, comprueba que `agent-respond.yml` ya está en `main` de app (el evento `issue_comment` solo lee los workflows de la rama por defecto).""",
+    "9": """**Imagen publicada**: `ghcr.io/acbacb77/poc-almagentic-app@sha256:02e89f6f…` (etiquetas `sha-<commit>` y `main`). Certificado de firma de Sigstore válido 10 minutos con identidad `…/poc-almagentic-core/.github/workflows/reusable-supply-chain.yml@refs/tags/v1`; entrada 3226607006 en Rekor.
+
+**Verificar desde WSL**: `gh attestation verify oci://ghcr.io/acbacb77/poc-almagentic-app:main --owner acbacb77 --signer-workflow acbacb77/poc-almagentic-core/.github/workflows/reusable-supply-chain.yml`.
+
+**Problemas típicos**: si `image / build` falla en «Imágenes base fijadas por digest», la anotación trae el digest que hay que poner en el `Dockerfile`. Un job de un workflow reutilizable sin `permissions` hereda el bloque del workflow, no el de quien llama.""",
     "F": """**Por qué**: sin esta extensión el desarrollador escribe dos prompts por feature en el devcontainer (spec e implementación). Con ella, el agente arranca con los mismos eventos en los que ya decide un humano: la etiqueta `aprobado` y el merge de la spec. El devcontainer se mantiene como modo interactivo.
 
 **Cómo** (repo `poc-almagentic-core`, `reusable-agent-feature.yml`): el job `work` comprueba permiso de escritura de quien dispara, issue abierto con `aprobado` y sin `triage:sospechoso`, y que no exista ya la rama; después ejecuta Claude Code con el harness y el sandbox del repo (red limitada a GitHub y PyPI), 40 o 150 turnos y 60 minutos, sin token de GitHub. El job `publish` decide la rama, rechaza en la fase spec todo lo que no esté en `specs/`, pasa `check_pr_files.py`, sube la rama, abre el PR como `almagentic-agent[bot]` y lo anuncia en el issue.

@@ -990,21 +990,79 @@ const TASKS = [
   "id": "9",
   "title": "Supply chain",
   "phase": "Entrega",
-  "status": "next",
-  "desc": "SBOM, firma de la imagen y provenance.",
+  "status": "done",
+  "desc": "Imagen de la API probada, con SBOM, firmada con cosign y con atestaciones de procedencia SLSA y de SBOM verificadas contra el workflow de core. Los commits del agente salen verificados.",
   "alm": null,
-  "prereqs": [],
+  "prereqs": [
+   [
+    "Paquete poc-almagentic-app público en GHCR",
+    true
+   ]
+  ],
   "subs": [
    [
-    "SBOM, firma y atestación de la imagen",
+    "Workflow reutilizable: bases por digest, build, prueba de humo y SBOM; en main, GHCR, cosign y atestaciones",
     "claude",
-    false,
-    []
+    true,
+    [
+     {
+      "label": "core#17",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/17"
+     }
+    ]
    ],
    [
-    "Fusionar y etiqueta de core",
+    "Dockerfile multietapa sin root y .dockerignore; el agente no puede tocarlos",
+    "claude",
+    true,
+    [
+     {
+      "label": "app#21",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/21"
+     }
+    ]
+   ],
+   [
+    "Fijar las imágenes base con los digests que dio el CI",
+    "claude",
+    true,
+    [
+     {
+      "label": "app#21",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/21"
+     }
+    ]
+   ],
+   [
+    "Arreglo: publish heredaba permissions: {} y no podía subir a GHCR",
+    "claude",
+    true,
+    [
+     {
+      "label": "core#18",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/18"
+     }
+    ]
+   ],
+   [
+    "Commits del agente por la API de GitHub (Verified)",
+    "claude",
+    true,
+    [
+     {
+      "label": "core#19",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/19"
+     },
+     {
+      "label": "app#22",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/22"
+     }
+    ]
+   ],
+   [
+    "Fusionar, mover v1 (v1.5.0, v1.5.1, v1.6.0) y relanzar la publicación",
     "usuario",
-    false,
+    true,
     []
    ]
   ]
@@ -1013,7 +1071,7 @@ const TASKS = [
   "id": "10",
   "title": "Deploy GitOps con gate humano",
   "phase": "Entrega",
-  "status": "todo",
+  "status": "next",
   "desc": "El bot promotor abre un PR en gitops; tu merge despliega con Argo CD en el cluster local.",
   "alm": null,
   "prereqs": [

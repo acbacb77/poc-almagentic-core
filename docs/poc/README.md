@@ -2,7 +2,7 @@
 
 Registro de todo lo hecho en la POC: decisiones, pasos manuales, PRs y problemas resueltos. Se actualiza al cerrar cada tarea, junto con la [memoria del TFM](../tfm/README.md), que es requisito para cerrar la POC.
 
-**Última actualización:** 12 de octubre de 2026 · **Avance:** 10 de 18 tareas (1, 2, 3, A, 4, 5, 6, 7, 8 y F)
+**Última actualización:** 12 de octubre de 2026 · **Avance:** 11 de 18 tareas (1, 2, 3, A, 4, 5, 6, 7, 8, F y 9)
 
 **Cada tarea tiene sus prerrequisitos manuales y sus subtareas en orden.** **Leyenda de responsables:** Usuario 👤 (acción manual) · Claude 🤖 (sesión de trabajo) · Agente (bot `almagentic-agent` en el devcontainer) · Automático ⚙️ (GitHub Actions, Argo CD)
 
@@ -39,7 +39,10 @@ Registro de todo lo hecho en la POC: decisiones, pasos manuales, PRs y problemas
 
 | Etiqueta | Apunta a | Creada por | Notas |
 |---|---|---|---|
-| `v1` | `60dd1cc` (core#14) | 👤 release desde la UI | Etiqueta móvil que usan las apps. Se mueve a cada `main` nueva de core. Automatizar en la tarea B |
+| `v1` | `89832cf` (core#19) | 👤 release desde la UI | Etiqueta móvil que usan las apps. Se mueve a cada `main` nueva de core. Automatizar en la tarea B |
+| `v1.6.0` | `89832cf` (core#19) | 👤 | Commits del agente verificados |
+| `v1.5.1` | `3d44a36` (core#18) | 👤 | Arreglo de permisos de la publicación |
+| `v1.5.0` | `25d79a9` (core#17) | 👤 | Cadena de suministro de la imagen |
 | `v1.4.0` | `60dd1cc` (core#14) | 👤 | Agente autónomo de features (extensión F) |
 | `v1.3.0` | `34d18ef` (core#12) | 👤 | Agente revisor y respuesta a `@claude` |
 | `v1.2.0` | `e6076fa` (core#10) | 👤 | Escaneo de seguridad |
@@ -63,8 +66,8 @@ Las tareas con letra son **extensiones ALM**: se añadieron al plan original y s
 | **7** | Scan de seguridad | Principal | ✅ Hecha |
 | **8** | Agente revisor y respuesta a @claude | Principal | ✅ Hecha |
 | ↳ F | Agente autónomo en Actions | Extensión ALM (entre 8 y 9) | ✅ Hecha |
-| **9** | Supply chain | Principal | ⏭️ Siguiente |
-| **10** | Deploy GitOps con gate humano | Principal | Pendiente |
+| **9** | Supply chain | Principal | ✅ Hecha |
+| **10** | Deploy GitOps con gate humano | Principal | ⏭️ Siguiente |
 | ↳ B | Gestión de releases | Extensión ALM (entre 10 y 11) | Pendiente |
 | **11** | Cerrar el loop de operación | Principal | Pendiente |
 | ↳ C | Mantenimiento continuo | Extensión ALM (entre 11 y 12) | Pendiente |
@@ -436,24 +439,36 @@ Un revisor sin herramientas comenta cada PR contra la spec, y un comentario @cla
 
 ---
 
-## Tarea 9 · Supply chain ⏭️
+## Tarea 9 · Supply chain ✅
 
-SBOM, firma de la imagen y provenance.
+Imagen de la API probada, con SBOM, firmada con cosign y con atestaciones de procedencia SLSA y de SBOM verificadas contra el workflow de core. Los commits del agente salen verificados.
 
 ### Prerrequisitos manuales
 
-- Ninguno nuevo.
+- ✅ Paquete poc-almagentic-app público en GHCR
 
 ### Subtareas
 
 | # | Subtarea | Quién | Estado | Enlaces |
 |---|---|---|---|---|
-| 9.1 | SBOM, firma y atestación de la imagen | Claude 🤖 | ⬜ |  |
-| 9.2 | Fusionar y etiqueta de core | Usuario 👤 | ⬜ |  |
+| 9.1 | Workflow reutilizable: bases por digest, build, prueba de humo y SBOM; en main, GHCR, cosign y atestaciones | Claude 🤖 | ✅ | [core#17](https://github.com/acbacb77/poc-almagentic-core/pull/17) |
+| 9.2 | Dockerfile multietapa sin root y .dockerignore; el agente no puede tocarlos | Claude 🤖 | ✅ | [app#21](https://github.com/acbacb77/poc-almagentic-app/pull/21) |
+| 9.3 | Fijar las imágenes base con los digests que dio el CI | Claude 🤖 | ✅ | [app#21](https://github.com/acbacb77/poc-almagentic-app/pull/21) |
+| 9.4 | Arreglo: publish heredaba permissions: {} y no podía subir a GHCR | Claude 🤖 | ✅ | [core#18](https://github.com/acbacb77/poc-almagentic-core/pull/18) |
+| 9.5 | Commits del agente por la API de GitHub (Verified) | Claude 🤖 | ✅ | [core#19](https://github.com/acbacb77/poc-almagentic-core/pull/19) · [app#22](https://github.com/acbacb77/poc-almagentic-app/pull/22) |
+| 9.6 | Fusionar, mover v1 (v1.5.0, v1.5.1, v1.6.0) y relanzar la publicación | Usuario 👤 | ✅ |  |
+
+### Detalle
+
+**Imagen publicada**: `ghcr.io/acbacb77/poc-almagentic-app@sha256:02e89f6f…` (etiquetas `sha-<commit>` y `main`). Certificado de firma de Sigstore válido 10 minutos con identidad `…/poc-almagentic-core/.github/workflows/reusable-supply-chain.yml@refs/tags/v1`; entrada 3226607006 en Rekor.
+
+**Verificar desde WSL**: `gh attestation verify oci://ghcr.io/acbacb77/poc-almagentic-app:main --owner acbacb77 --signer-workflow acbacb77/poc-almagentic-core/.github/workflows/reusable-supply-chain.yml`.
+
+**Problemas típicos**: si `image / build` falla en «Imágenes base fijadas por digest», la anotación trae el digest que hay que poner en el `Dockerfile`. Un job de un workflow reutilizable sin `permissions` hereda el bloque del workflow, no el de quien llama.
 
 ---
 
-## Tarea 10 · Deploy GitOps con gate humano ⬜
+## Tarea 10 · Deploy GitOps con gate humano ⏭️
 
 El bot promotor abre un PR en gitops; tu merge despliega con Argo CD en el cluster local.
 
@@ -475,8 +490,6 @@ El bot promotor abre un PR en gitops; tu merge despliega con Argo CD en el clust
 ### Detalle
 
 **Cómo preparar el cluster**: pasos en el [README de gitops](https://github.com/acbacb77/poc-almagentic-gitops#puesta-en-marcha-una-sola-vez).
-
-_Subtareas previstas: se ajustarán al llegar a la tarea._
 
 ---
 
@@ -630,6 +643,9 @@ _Subtareas previstas: se ajustarán al llegar a la tarea._
 | El agente en Actions no puede usar `uv run` | La caché de uv del runner es de solo lectura dentro del sandbox | `UV_CACHE_DIR` dentro del proyecto y excluida de git (core#14) |
 | El agente ve `.bashrc`, `.idea`, `.mcp.json`… sin seguimiento | El sandbox de Claude Code protege esos ficheros de la carpeta de trabajo mientras dura la sesión | No entran en el parche; el script solo publica lo que corresponde a la fase |
 | El revisor dice que un test de Unicode descompuesto usa la forma precompuesta | El revisor solo ve texto y no distingue `á` de `a` + U+0301 | Falso positivo; se comprobaron los bytes |
+| `image / build` falla en «Imágenes base fijadas por digest» | El `Dockerfile` usa una etiqueta sin digest | Copiar a `FROM` el digest que trae la anotación |
+| `release / publish` falla al subir a GHCR | Con `permissions: {}` a nivel de workflow, el job reutilizable sin permisos propios hereda ese bloque vacío | Quitar el bloque (core#18) y *Re-run all jobs* |
+| `image / publish` y `release` aparecen omitidos en un PR | La publicación solo corre en main | Es lo esperado |
 
 ---
 
@@ -645,5 +661,4 @@ _Subtareas previstas: se ajustarán al llegar a la tarea._
 
 - Triage: mostrar en el comentario el motivo cuando el modelo devuelve un error (p. ej. el 401).
 - Revisor (app#15): fijar por SHA los workflows reutilizables que reciben secretos (tarea B).
-- Commits del bot sin firma (*Unverified*): valorar firmarlos en la tarea 9.
-- Despliegue (tarea 10): comprobar con uvicorn real que el filtro `SinQueryString` quita `q` del log de acceso.
+- Despliegue (tarea 10): desplegar la imagen por digest y verificar su firma antes de desplegar.
