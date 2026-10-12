@@ -34,7 +34,8 @@ on:
         description: Digest de la imagen publicada
         value: ${{ jobs.publish.outputs.digest }}
 
-permissions: {}
+# Sin `permissions` a nivel de workflow: si se declarara, `publish` heredaría ese
+# bloque y no los permisos de quien llama.
 
 env:
   SYFT_VERSION: v1.54.1
@@ -175,8 +176,12 @@ jobs:
           docker load -q -i imagen.tar
           echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           docker tag "${IMAGE}:${TAG}" "${IMAGE}:main"
-          docker push -q "${IMAGE}:${TAG}"
-          docker push -q "${IMAGE}:main"
+          for ref in "${IMAGE}:${TAG}" "${IMAGE}:main"; do
+            if ! docker push -q "$ref" 2> push.err; then
+              echo "::error title=No se pudo subir a GHCR::${ref}: $(tr '\n' ' ' < push.err). El job que llama debe conceder packages: write."
+              exit 1
+            fi
+          done
           digest=$(docker buildx imagetools inspect "${IMAGE}:${TAG}" --format '{{json .Manifest}}' | jq -r .digest)
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
           echo "::notice title=Imagen publicada::${IMAGE}@${digest}"
