@@ -186,14 +186,14 @@ jobs:
         with:
           name: respond-${{ inputs.pr-number }}-${{ github.run_id }}-${{ github.run_attempt }}
 
-      - name: Rama del PR con la identidad del agente
+      - name: Rama del PR (solo lectura; el commit se publica por la API)
         if: needs.work.result == 'success'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.work.outputs.head-ref }}
           path: app
           fetch-depth: 0
-          token: ${{ steps.token.outputs.token }}
+          persist-credentials: false
 
       - name: Revisar, subir y responder
         env:
@@ -224,5 +224,9 @@ jobs:
             sed -n 's/^::error file=\([^:]*\)::\(.*\)$/\1: \2/p' "$W/problemas.txt" > "$W/problemas-legibles.txt"
             report rejected "$W/claude-output.json" --problems "$W/problemas-legibles.txt"; exit 1
           fi
-          git push origin "HEAD:refs/heads/${HEAD_REF}"
-          report pushed "$W/claude-output.json" --commit "$(git rev-parse HEAD)"
+          # Commit por la API de GitHub: sale firmado (Verified) y falla si la rama ha cambiado.
+          if ! sha=$(python3 "$W/core/scripts/agent/api_commit.py" . "$REPO" "$HEAD_REF" "$HEAD_SHA" 2> "$W/api.err"); then
+            cat "$W/api.err"; report failed "$W/claude-output.json" --run "$RUN_URL"; exit 1
+          fi
+          cat "$W/api.err"
+          report pushed "$W/claude-output.json" --commit "$sha"
