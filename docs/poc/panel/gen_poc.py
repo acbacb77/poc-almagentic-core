@@ -119,15 +119,17 @@ TASKS = [
                ("Comentar @claude en el PR de prueba", "usuario", True, [pr("app", 16)]),
                ("Comprobar commit del bot, checks en verde, revisión y que el bot no se dispara a sí mismo", "claude", True, [pr("app", 16)]),
                ("Fusionar app#16", "usuario", True, [])]),
-    dict(id="F", title="Agente autónomo en Actions", phase="Construcción", status="next",
+    dict(id="F", title="Agente autónomo en Actions", phase="Construcción", status="done",
          desc="La etiqueta aprobado lanza al agente en Actions para escribir la spec, y el merge de la spec lanza el plan, las tareas y la implementación. Desaparecen los prompts manuales del devcontainer; las aprobaciones humanas no cambian.",
          prereqs=[("Clave de almagentic-agent como secreto de Actions en app (la misma de la tarea 8)", True)],
-         subs=[("Workflow reutilizable del agente en core: etiqueta aprobado → PR de la spec", "claude", False, []),
-               ("Disparador al fusionar una spec → PR de implementación con Closes #issue", "claude", False, []),
-               ("Solo disparan usuarios con escritura; límite de turnos y de tiempo por ejecución", "claude", False, []),
-               ("Control de la red de salida del runner (equivalente al sandbox)", "claude", False, []),
-               ("Fusionar, actualizar la etiqueta de core y probar con una petición nueva", "usuario", False, [])]),
-    dict(id="9", title="Supply chain", phase="Entrega", status="todo",
+         subs=[("Workflow reutilizable del agente en core: etiqueta aprobado → PR de la spec", "claude", True, [pr("core", 14)]),
+               ("Disparador al fusionar una spec → PR de implementación con Closes #issue", "claude", True, [pr("core", 14), pr("app", 17)]),
+               ("Solo disparan usuarios con escritura; límite de turnos y de tiempo por ejecución", "claude", True, [pr("core", 14)]),
+               ("Control de la red de salida del runner: sandbox del repo con dominios permitidos", "claude", True, [pr("core", 14)]),
+               ("Fusionar core#14 y app#17, mover v1 (y crear v1.4.0)", "usuario", True, []),
+               ("Prueba real: petición #18 → spec (app#19) → implementación (app#20)", "usuario", True, [issue(18, "búsqueda por nombre"), pr("app", 19), pr("app", 20)]),
+               ("Título del PR sin el prefijo de la plantilla", "claude", True, [pr("core", 15)])]),
+    dict(id="9", title="Supply chain", phase="Entrega", status="next",
          desc="SBOM, firma de la imagen y provenance.",
          prereqs=[],
          subs=[("SBOM, firma y atestación de la imagen", "claude", False, []),
@@ -284,7 +286,9 @@ DETAILS = {
 **Problema típico**: si `@claude` no hace nada, comprueba que `agent-respond.yml` ya está en `main` de app (el evento `issue_comment` solo lee los workflows de la rama por defecto).""",
     "F": """**Por qué**: sin esta extensión el desarrollador escribe dos prompts por feature en el devcontainer (spec e implementación). Con ella, el agente arranca con los mismos eventos en los que ya decide un humano: la etiqueta `aprobado` y el merge de la spec. El devcontainer se mantiene como modo interactivo.
 
-**Riesgos y controles**: el agente lee el issue sin una persona delante, así que solo lo disparan usuarios con escritura (como el triage). Usa el token de una hora de la GitHub App, limitado a app y sin permiso sobre workflows. En el runner no hay bubblewrap: el aislamiento lo da la máquina efímera y la red se limita con un control de salida. Cada ejecución tiene límite de turnos y de tiempo.""",
+**Cómo** (repo `poc-almagentic-core`, `reusable-agent-feature.yml`): el job `work` comprueba permiso de escritura de quien dispara, issue abierto con `aprobado` y sin `triage:sospechoso`, y que no exista ya la rama; después ejecuta Claude Code con el harness y el sandbox del repo (red limitada a GitHub y PyPI), 40 o 150 turnos y 60 minutos, sin token de GitHub. El job `publish` decide la rama, rechaza en la fase spec todo lo que no esté en `specs/`, pasa `check_pr_files.py`, sube la rama, abre el PR como `almagentic-agent[bot]` y lo anuncia en el issue.
+
+**Prueba** (petición #18, búsqueda por nombre): 2 min de etiqueta a PR de spec (app#19); un `@claude` resolvió las dos dudas; 2 min de merge a PR de implementación (app#20, 103 tests); un segundo `@claude` corrigió la fuga del texto de `q` en el log de acceso que encontró el revisor. 25 minutos de issue a cierre, con cuatro decisiones humanas.""",
     "10": """**Cómo preparar el cluster**: pasos en el [README de gitops](https://github.com/acbacb77/poc-almagentic-gitops#puesta-en-marcha-una-sola-vez).
 """,
 }

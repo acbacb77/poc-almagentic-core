@@ -1,0 +1,297 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Agente autónomo: de la petición al merge",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "external": {
+          "label": "Persona o entrada"
+        },
+        "backend": {
+          "label": "Agente o proceso"
+        },
+        "security": {
+          "label": "Control o aprobación"
+        },
+        "frontend": {
+          "label": "Artefacto en GitHub"
+        },
+        "database": {
+          "label": "Estado en git"
+        },
+        "messagebus": {
+          "label": "Bot de promoción"
+        },
+        "cloud": {
+          "label": "Clúster"
+        }
+      }
+    }
+  },
+  "components": [
+    {
+      "id": "issue",
+      "type": "external",
+      "label": "Issue",
+      "sublabel": "petición",
+      "pos": [
+        40,
+        50
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "triage",
+      "type": "backend",
+      "label": "Triage",
+      "sublabel": "propone",
+      "pos": [
+        260,
+        50
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "aprobado",
+      "type": "security",
+      "label": "aprobado",
+      "sublabel": "decide el responsable",
+      "pos": [
+        480,
+        50
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "aspec",
+      "type": "backend",
+      "label": "Agente spec",
+      "sublabel": "Spec Kit, sin token",
+      "pos": [
+        480,
+        190
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "prspec",
+      "type": "frontend",
+      "label": "PR de la spec",
+      "sublabel": "solo specs/",
+      "pos": [
+        260,
+        190
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "mspec",
+      "type": "security",
+      "label": "Merge de la spec",
+      "sublabel": "decide el responsable",
+      "pos": [
+        40,
+        190
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "aimpl",
+      "type": "backend",
+      "label": "Agente código",
+      "sublabel": "plan, tareas, código",
+      "pos": [
+        40,
+        330
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "prfeat",
+      "type": "frontend",
+      "label": "PR de código",
+      "sublabel": "Closes #issue",
+      "pos": [
+        260,
+        330
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "checks",
+      "type": "security",
+      "label": "Checks",
+      "sublabel": "CI, seguridad, revisor",
+      "pos": [
+        480,
+        330
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "merge",
+      "type": "security",
+      "label": "Merge",
+      "sublabel": "decide el responsable",
+      "pos": [
+        480,
+        470
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "cerrado",
+      "type": "frontend",
+      "label": "Issue cerrado",
+      "sublabel": "trazabilidad",
+      "pos": [
+        260,
+        470
+      ],
+      "size": [
+        140,
+        56
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Demanda",
+      "wraps": [
+        "issue",
+        "triage",
+        "aprobado"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Fase spec",
+      "wraps": [
+        "aspec",
+        "prspec",
+        "mspec"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Fase implement",
+      "wraps": [
+        "aimpl",
+        "prfeat",
+        "checks"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Cierre",
+      "wraps": [
+        "merge",
+        "cerrado"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "e1",
+      "from": "issue",
+      "to": "triage"
+    },
+    {
+      "id": "e2",
+      "from": "triage",
+      "to": "aprobado"
+    },
+    {
+      "id": "e3",
+      "from": "aprobado",
+      "to": "aspec",
+      "label": "etiqueta",
+      "labelAt": [
+        550,
+        148
+      ]
+    },
+    {
+      "id": "e4",
+      "from": "aspec",
+      "to": "prspec",
+      "label": "script publica"
+    },
+    {
+      "id": "e5",
+      "from": "prspec",
+      "to": "mspec",
+      "label": "@claude ajusta"
+    },
+    {
+      "id": "e6",
+      "from": "mspec",
+      "to": "aimpl",
+      "label": "merge",
+      "labelAt": [
+        110,
+        288
+      ]
+    },
+    {
+      "id": "e7",
+      "from": "aimpl",
+      "to": "prfeat",
+      "label": "script publica"
+    },
+    {
+      "id": "e8",
+      "from": "prfeat",
+      "to": "checks"
+    },
+    {
+      "id": "e9",
+      "from": "checks",
+      "to": "merge",
+      "labelAt": [
+        550,
+        428
+      ],
+      "label": "en verde"
+    },
+    {
+      "id": "e10",
+      "from": "merge",
+      "to": "cerrado"
+    }
+  ]
+}

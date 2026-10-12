@@ -2,7 +2,7 @@
 
 Los agentes de IA actuales planifican, escriben código, ejecutan herramientas y abren *pull requests*. Con ellos, el ingeniero deja de ejecutar cada fase del ciclo de vida del software y pasa a definir la intención y a supervisar y validar el trabajo de los agentes. Se gana velocidad, pero aparecen riesgos nuevos. Un agente con permisos de escritura que lee texto no confiable (issues, comentarios, páginas web) puede ser manipulado mediante *prompt injection*, heredar las credenciales de una persona o modificar los controles que deberían vigilarlo.
 
-Este Trabajo Fin de Máster diseña y construye una prueba de concepto (POC) de ALM agéntico: un ciclo de vida de aplicaciones completo, desde que entra una petición hasta que se retira una versión de la API, en el que agentes basados en modelos de lenguaje (Claude) hacen el trabajo y las personas conservan las decisiones importantes. La solución tiene cuatro piezas. Hay tres repositorios con responsabilidades separadas (aplicación, plataforma y GitOps) y dos identidades no humanas de mínimo privilegio (GitHub Apps con tokens de una hora). El agente de código trabaja dentro de un *harness* de siete capas de defensa. Y el triage sigue un patrón que separa pensar de actuar: el modelo propone sin herramientas ni permisos, y un script determinista valida la propuesta y la aplica. El mismo patrón se usa en los PRs, donde un segundo agente revisa cada cambio contra la especificación y un colaborador puede pedir correcciones al agente de código con un comentario `@claude`.
+Este Trabajo Fin de Máster diseña y construye una prueba de concepto (POC) de ALM agéntico: un ciclo de vida de aplicaciones completo, desde que entra una petición hasta que se retira una versión de la API, en el que agentes basados en modelos de lenguaje (Claude) hacen el trabajo y las personas conservan las decisiones importantes. La solución tiene cuatro piezas. Hay tres repositorios con responsabilidades separadas (aplicación, plataforma y GitOps) y dos identidades no humanas de mínimo privilegio (GitHub Apps con tokens de una hora). El agente de código trabaja dentro de un *harness* de siete capas de defensa. Y el triage sigue un patrón que separa pensar de actuar: el modelo propone sin herramientas ni permisos, y un script determinista valida la propuesta y la aplica. El mismo patrón se usa en los PRs, donde un segundo agente revisa cada cambio contra la especificación y un colaborador puede pedir correcciones al agente de código con un comentario `@claude`. Por último, la aprobación de una petición y el merge de su especificación lanzan al agente sin que nadie le escriba un prompt; en la prueba, una feature completa pasó de petición a cierre en 25 minutos.
 
 El documento recoge el problema, el estado del arte, las decisiones de diseño con sus alternativas, la implementación, el registro completo de iteraciones con los modelos y los resultados de las pruebas. Entre esas pruebas hay un intento de *prompt injection* que el sistema detecta y neutraliza. La documentación técnica permite reproducir la POC desde cero.
 
@@ -518,15 +518,59 @@ El revisor comentó el commit del agente con cuatro hallazgos. La descripción d
 
 La prueba enseña algo que no se había visto en las tareas anteriores: el agente trabaja sin que nadie abra el devcontainer, su cambio queda asociado a su identidad, pasa las mismas comprobaciones que el de una persona y otro modelo lo revisa antes de que alguien decida. También deja una advertencia. Para que su cambio pasara, el agente modificó un test existente. Esta vez tenía motivo y lo declaró, y el revisor lo señaló, pero es el tipo de cambio que una persona tiene que mirar. Por último, el commit aparece como *Unverified* porque no lleva firma criptográfica; la tarea 9 valorará firmarlo.
 
+## Extensión F: agente autónomo en Actions
+
+Hasta la tarea 8, cada feature pedía dos prompts escritos a mano en el devcontainer: uno para la spec y otro para la implementación. La extensión F los quita. El agente arranca con dos eventos que ya eran decisiones humanas: la etiqueta `aprobado` en un issue y el merge del PR de la spec. Las aprobaciones no cambian; desaparece el paso de abrir el contenedor y escribirle al agente.
+
+![Figura 7. Agente autónomo: cada fase del agente empieza con una decisión humana y termina en un PR que decide otra.](figuras/autonomo.png)
+
+| Evento en app | Fase | Qué hace el agente | Resultado |
+|---|---|---|---|
+| Etiqueta `aprobado` en un issue | `spec` | Escribe la spec con la skill `speckit-specify` | PR `spec/<issue>-<slug>` con `Refs #issue`, solo con ficheros de `specs/` |
+| Merge de un PR `spec/<issue>-<slug>` | `implement` | Sigue `speckit-plan`, `speckit-tasks` y `speckit-implement` | PR `feat/<issue>-<slug>` con `Closes #issue` |
+
+El workflow de core, `reusable-agent-feature.yml`, repite el esquema de la respuesta a `@claude`. El job `work` empieza con unas comprobaciones que hace `feature.py check` y que el modelo no puede saltarse:
+
+- quien puso la etiqueta o fusionó la spec tiene permiso de escritura;
+- el issue está abierto, tiene `aprobado` y no tiene `triage:sospechoso`;
+- no existe ya la rama de esa fase, de modo que una etiqueta repetida no duplica el trabajo.
+
+Si alguna falla, el agente no arranca y el motivo se publica en el issue. Si pasan, Claude Code trabaja sobre una copia de `main` con el *harness* del repo, sin token de GitHub y con un límite de 40 turnos para la spec, 150 para la implementación y 60 minutos por ejecución. El control de la red de salida lo da el propio sandbox del repo, que solo deja salir a GitHub y a PyPI. Al prompt llegan como datos el issue, los comentarios del responsable y la propuesta del triage; los comentarios de terceros no entran.
+
+El job `publish` no ejecuta ningún modelo y es quien decide lo importante. Elige la rama a partir de la carpeta de spec creada, no de lo que diga el modelo. En la fase `spec` rechaza cualquier fichero fuera de `specs/`, que es la regla de AGENTS.md «no escribas código todavía» convertida en una comprobación. Después pasa `check_pr_files.py`, hace el commit como `almagentic-agent[bot]`, sube la rama, abre el PR y lo anuncia en el issue.
+
+El prompt de implementación incorpora la lección de app#16: el agente no puede cambiar tests existentes para que su código pase. Si un test contradice la spec, tiene que dejarlo y explicarlo.
+
+### Prueba de extremo a extremo
+
+La prueba fue una petición real, el issue #18: buscar productos por nombre con `GET /api/v1/productos?q=taza`, sin distinguir mayúsculas ni acentos y sin cambiar nada para quien no use `q`.
+
+| Hora | Quién | Qué pasó |
+|---|---|---|
+| 0:00 | Responsable | Crea el issue con la plantilla; el triage propone `mejora`, `baja`, `S`, cuatro criterios y cuatro preguntas abiertas |
+| 2:16 | Responsable | Pone la etiqueta `aprobado` |
+| 4:11 | Agente | Abre app#19 con `specs/002-buscar-productos-nombre/` (spec y checklist). Deja dos dudas marcadas con un valor por defecto, porque nadie había contestado al triage, y señala que la spec 001 decía «sin filtros» |
+| 7:16 | Responsable | Contesta las dudas con un `@claude` en app#19; el agente actualiza la spec en 54 segundos |
+| 14:03 | Responsable | Aprueba y fusiona la spec |
+| 16:25 | Agente | Abre app#20 con el plan, las tareas, el código y 42 tests nuevos (100 en total), sin dependencias nuevas y sin tocar ningún test existente |
+| 21:54 | Responsable | Pide con `@claude` el arreglo que encontró el revisor; el agente lo sube en 61 segundos (103 tests) |
+| 25:18 | Responsable | Aprueba y fusiona; el issue #18 se cierra solo |
+
+Fueron 25 minutos desde la petición hasta el cierre, con cuatro decisiones humanas y ningún prompt escrito en el devcontainer. Los PRs del bot los aprobó el responsable como revisor normal, sin *bypass*, porque el autor ya no era él.
+
+El revisor fue útil en las dos fases. En la spec pidió resolver las dudas antes de planificar. En la implementación encontró un defecto que no habían visto ni la spec ni el agente: uvicorn guarda en su log de acceso la URL completa, así que el texto de `q` acababa en los logs, contra FR-011. El agente lo corrigió con un filtro en el logger de acceso. El revisor también se equivocó una vez. Dijo que un test de Unicode descompuesto usaba la forma precompuesta, y al mirar los bytes resultó ser `a` seguida de U+0301. Un modelo que solo lee el diff como texto no puede distinguir las dos formas, así que sus hallazgos se tienen que comprobar.
+
+Quedaron dos detalles. El título de los PRs arrastraba el prefijo «[Petición]» de la plantilla, y se corrigió en core#15. El agente contó además que veía ficheros como `.bashrc` o `.idea` sin seguimiento en la carpeta de trabajo. Los crea el sandbox para protegerlos mientras dura la sesión y no llegaron al PR.
+
 ## Tareas pendientes
 
-> Las secciones de las tareas 9 a 12 y de las extensiones B a F se añadirán a medida que se implementen: agente autónomo, cadena de suministro, despliegue GitOps, *releases*, operación, mantenimiento, retirada y trazabilidad.
+> Las secciones de las tareas 9 a 12 y de las extensiones B a E se añadirán a medida que se implementen: cadena de suministro, despliegue GitOps, *releases*, operación, mantenimiento, retirada y trazabilidad.
 
 # Iteraciones con modelos, pruebas y resultados
 
 ## Metodología de trabajo con los modelos
 
-La POC usa modelos de lenguaje en cinco papeles:
+La POC usa modelos de lenguaje en seis papeles:
 
 | Rol | Modelo y herramienta | Dónde se ejecuta | Permisos |
 |---|---|---|---|
@@ -535,6 +579,7 @@ La POC usa modelos de lenguaje en cinco papeles:
 | Agente de triage | Claude Code en modo no interactivo, modelo *sonnet* | GitHub Actions | Sin herramientas; solo lectura |
 | Agente revisor | Claude Code en modo no interactivo, modelo *sonnet* | GitHub Actions | Sin herramientas; un script publica el comentario |
 | Agente de código en el PR | Claude Code, modelo *sonnet* | GitHub Actions | *Harness* y sandbox, sin token; un script sube el cambio con la App del agente |
+| Agente autónomo de features | Claude Code, modelo *sonnet* | GitHub Actions | Igual que el anterior; lo lanzan la etiqueta `aprobado` y el merge de la spec |
 
 El trabajo con el asistente siguió siempre el mismo ciclo. El autor plantea una pregunta o tarea; el modelo investiga (documentación oficial y fuentes web) y propone o implementa mediante un PR; el autor revisa y aprueba o corrige, y el modelo incorpora la corrección. Varias correcciones del autor encontraron problemas que el modelo no había visto: un fichero generado dentro de un PR, problemas de diseño en la documentación y fallos del entorno local, que el modelo no podía observar.
 
@@ -679,6 +724,16 @@ El registro que sigue resume toda la conversación del proyecto. Se han omitido 
 | 72 | «Movido el tag» | Comprueba que `v1` apunta a la nueva `main`, relanza app#15 con un commit vacío y resume la primera revisión real. Abre app#16 con el test de FR-009 y corrige una línea demasiado larga que habría hecho fallar el lint por otro motivo | Revisor operativo; PR de prueba listo |
 | 73 | «Sí, lo ha hecho correctamente» (tras fusionar app#15 y comentar `@claude` en app#16) | Verifica el commit del bot, los checks, la revisión y que el bot no se relanza a sí mismo. Corrige la descripción del PR según el revisor y cierra la tarea | Tarea 8 cerrada |
 
+### Fase 13 · Agente autónomo (12 de octubre)
+
+| # | Petición del autor | Respuesta y acción del modelo | Resultado |
+|---|---|---|---|
+| 74 | «Siguiente» | Diseña la extensión F sobre el esquema de la respuesta a `@claude`: comprobaciones previas, Spec Kit sin token y un script que decide rama y alcance. Escribe `feature.py` con 24 tests y los dos prompts, prueba con actionlint y abre core#14 y app#17. Aprovecha para dar al agente una caché de uv escribible | Extensión F preparada |
+| 75 | «El campo "criterios" no existe en la plantilla de issue. ¿Qué significa "sin `q`, la respuesta no cambia"?» | Corrige el nombre del campo («¿Cómo sabremos que está hecho?»), da el texto de cada campo y explica que el criterio protege a la tienda que ya usa el endpoint (compatibilidad de `/api/v1`) | Issue #18 creado |
+| 76 | «Aprobado» | Comprueba que la etiqueta lanzó al agente y revisa app#19: spec coherente y dos dudas abiertas. Propone resolverlas con un `@claude` y aprobar el PR del bot sin *bypass* | Spec en revisión |
+| 77 | «Listo» (spec fusionada) | Revisa app#20: código limpio, ningún test existente tocado, 100 tests en local. Contrasta los hallazgos del revisor: uno acertado (fuga de `q` en el log de acceso) y un falso positivo (Unicode). Redacta el `@claude` para el arreglo | Implementación en revisión |
+| 78 | «Listo» (implementación fusionada) | Comprueba el cierre del issue, quita el prefijo de la plantilla de los títulos (core#15) y cierra la extensión | Extensión F cerrada |
+
 ## Pruebas realizadas y resultados
 
 ### Pruebas automáticas
@@ -686,12 +741,13 @@ El registro que sigue resume toda la conversación del proyecto. Se han omitido 
 | Componente | Pruebas | Resultado |
 |---|---|---|
 | Hook `guard.py` | 45 casos: 21 comandos que deben bloquearse, 10 que deben permitirse, ficheros protegidos, secretos y auditoría | 45/45 superadas |
-| Aplicación: catálogo (`app`) | 58 casos: listado, consulta por id, 404, precio con 2 decimales, orden estable, catálogo mal formado, despliegue de un cambio de precio, observabilidad, `/health` y `Cache-Control: no-store` | 58/58 superadas |
+| Aplicación: catálogo (`app`) | 103 casos: listado, consulta por id, 404, precio con 2 decimales, orden estable, catálogo mal formado, despliegue de un cambio de precio, observabilidad, `/health`, `Cache-Control: no-store` y búsqueda por nombre (45, escritos por el agente autónomo) | 103/103 superadas |
 | CI obligatorio (app#12) | PR con un `import` sin usar | CI en rojo y merge bloqueado |
 | Gobierno de PRs (`check_pr_files.py`) | 21 casos: ficheros generados, ficheros protegidos según el autor, cambios de dependencias permitidos y configuración de comprobaciones bloqueada | 21/21 superadas |
 | Escaneo de seguridad obligatorio (app#14) | PR con un `.pyc` en `__pycache__` | `governance` en rojo y merge bloqueado |
-| Revisor y respuesta (`scripts/agent`) | 16 casos: publicación y fallo seguro de la revisión, hallazgos fuera del PR, orden por severidad, neutralización, sospecha de inyección, separación de instrucción y datos en los prompts e informes de respuesta | 16/16 superadas |
+| Agentes en Actions (`scripts/agent`) | 41 casos. Revisor y respuesta (16): publicación y fallo seguro de la revisión, hallazgos fuera del PR, orden por severidad, neutralización, sospecha de inyección, separación de instrucción y datos en los prompts e informes de respuesta. Agente autónomo (25): comprobaciones previas, prompt con datos, nombres de rama, alcance de la fase spec, textos del PR e informes | 41/41 superadas |
 | Respuesta a `@claude` (app#16) | PR con tres tests de FR-009 que fallan y un comentario `@claude` | Commit del bot en 73 s, checks en verde, revisión publicada y sin bucle del bot |
+| Agente autónomo (issue #18) | Petición real con etiqueta `aprobado` | PR de spec en 2 min, PR de implementación en 2 min tras el merge, dos ajustes con `@claude`; issue cerrado en 25 min |
 | Triage (`apply.py`, `build_prompt.py`) | 12 casos: salida estructurada, valores inválidos, etiquetas arbitrarias, referencias falsas, neutralización de texto, sospecha de inyección | 12/12 superadas |
 
 ### Pruebas del harness en el entorno real
@@ -731,19 +787,23 @@ El caso de inyección prueba el diseño en dos niveles. El modelo detectó el in
 | Sandbox sin *user namespaces* | Perfil seccomp por defecto de Docker | `seccomp=unconfined` en el devcontainer | Una capa sin probar en ejecución real puede estar rota; el fallo seguro lo hizo visible |
 | `uv run` falla al agente en Actions | La caché de uv del runner es de solo lectura dentro del sandbox | El agente usó el entorno virtual; queda pendiente dar una caché escribible | El sandbox también limita al agente en el runner, y el agente declaró cómo lo resolvió |
 | Test antiguo contrario al requisito | La tarea 5 interpretó FR-009 como no enviar cabeceras de caché | El agente cambió el test y lo explicó; el revisor lo señaló | Un agente puede modificar tests existentes para que su cambio pase, y una persona tiene que verlo |
+| Texto de `q` en el log de acceso | uvicorn registra la URL completa | Filtro en el logger `uvicorn.access`, pedido con `@claude` | El revisor encontró un defecto que no vieron ni la spec ni el implementador |
+| Falso positivo del revisor sobre Unicode | El revisor lee el diff como texto | Se comprobaron los bytes | Los hallazgos del revisor se verifican antes de actuar |
+| Prefijo «[Petición]» en los títulos de los PRs | El script copiaba el título del issue | Se quita el prefijo (core#15) | Los detalles de presentación también salen al usarlo de verdad |
 
 ## Métricas del proceso
 
 | Métrica | Valor |
 |---|---|
-| Tareas completadas | 9 de 18 (1, 2, 3, A, 4, 5, 6, 7 y 8) |
-| PRs fusionados | 19 (7 en core y 12 en app; dos abiertos por el agente y uno con un commit suyo pedido con `@claude`), más la documentación |
-| Pruebas automáticas | 152 superadas (57 de harness y triage, 21 de gobierno de PRs, 16 de los agentes revisor y de respuesta, 58 de la aplicación) |
-| Iteraciones registradas con el asistente | 73 |
+| Tareas completadas | 10 de 18 (1, 2, 3, A, 4, 5, 6, 7, 8 y F) |
+| PRs fusionados | 24 (9 en core y 15 en app; cuatro abiertos por el agente y tres con commits suyos pedidos con `@claude`), más la documentación |
+| Pruebas automáticas | 222 superadas (57 de harness y triage, 21 de gobierno de PRs, 41 de los agentes en Actions, 103 de la aplicación) |
+| Iteraciones registradas con el asistente | 78 |
+| Tiempo de una feature con el agente autónomo | 25 minutos de la petición al cierre (issue #18), con cuatro decisiones humanas |
 | Problemas de entorno resueltos | 15 |
 | Vulnerabilidades de diseño detectadas antes de explotarse | 2 (aprobación imposible sin identidad propia; herencia de credenciales) |
 
-> Este capítulo se ampliará con las iteraciones y pruebas de las tareas 9 a 12 y B a F.
+> Este capítulo se ampliará con las iteraciones y pruebas de las tareas 9 a 12 y B a E.
 
 # Documentación técnica reproducible
 
@@ -864,7 +924,15 @@ Para ejecutar los tests de los scripts en local, desde el repo core:
 (cd scripts/agent && uvx --with pytest==9.1.1 pytest -q)
 ```
 
-> Los pasos de las tareas 9 a 12 y B a F se añadirán al completarlas.
+### Extensión F. Agente autónomo
+
+1. En core: añadir `reusable-agent-feature.yml`, `scripts/agent/feature.py` y los prompts `feature-spec.md` y `feature-implement.md`. Fusionar y mover `v1` (aquí también se creó `v1.4.0`).
+2. En app: añadir `.github/workflows/agent-feature.yml`, que llama al anterior en `issues: labeled` (etiqueta `aprobado`) y en `pull_request: closed` (merge de una rama `spec/…`). Usa los mismos secretos que la tarea 8. Fusionar.
+3. En app, en la web de GitHub: crear un issue con la plantilla de petición, esperar al triage y contestar sus preguntas en un comentario.
+4. Poner la etiqueta `aprobado`. En unos minutos el bot abre el PR de la spec y lo anuncia en el issue. Si hay dudas, pedir los cambios con `@claude` en el PR; después aprobar y fusionar.
+5. El merge de la spec lanza la implementación. Revisar el PR `feat/…`, pedir ajustes con `@claude` si hace falta, aprobar y fusionar; el issue se cierra solo.
+
+> Los pasos de las tareas 9 a 12 y B a E se añadirán al completarlas.
 
 ## Estructura de los repositorios
 
@@ -904,6 +972,8 @@ poc-almagentic-gitops/
 | No aparece *Re-run all jobs* | La ejecución falló al arrancar; hacer un push nuevo a la rama del PR |
 | `@claude` no hace nada | Comprobar que `agent-respond.yml` está en `main` de app y que el comentario está en un PR (no en un issue) y lo escribe un colaborador |
 | El agente comenta que no ha podido completar la petición | La rama cambió mientras trabajaba o el modelo falló; revisar la ejecución enlazada en el comentario y volver a pedirlo |
+| Al poner `aprobado` el bot comenta «El agente no ha empezado» | Leer el motivo: falta permiso de escritura, el issue tiene `triage:sospechoso` o ya existe la rama `spec/<issue>-…` |
+| El merge de la spec no lanza la implementación | La rama del PR debe empezar por `spec/<issue>-` y venir del mismo repositorio |
 
 # Conclusiones y trabajo futuro
 
@@ -915,6 +985,7 @@ poc-almagentic-gitops/
 4. Separar pensar de actuar neutraliza la *prompt injection* en el triage. El modelo detectó el ataque, pero el diseño no depende de que lo detecte.
 5. La revisión humana sigue encontrando problemas que el modelo no ve. Varios de los más relevantes los detectó el autor (ficheros generados, estructura de la documentación) o solo aparecieron en su entorno real.
 6. El patrón de pensar y actuar por separado sirve también para un agente que escribe código. En la respuesta a `@claude` el modelo cambia ficheros pero no puede publicarlos; un script sin modelo decide si el cambio se sube. Al pedirle que hiciera pasar unos tests, el agente modificó un test existente. Tenía motivo y lo declaró, pero ese es el tipo de cambio que debe revisar una persona.
+7. Con el agente lanzado por las decisiones humanas que ya existían, una feature pequeña pasó de petición a cierre en 25 minutos sin escribir ningún prompt. La persona no desaparece del ciclo: aprobó la petición, resolvió las dudas, revisó dos PRs y corrigió un fallo que el revisor señaló. Lo que desaparece es el trabajo de intermediario entre el issue y el agente.
 
 ## Trabajo futuro
 
