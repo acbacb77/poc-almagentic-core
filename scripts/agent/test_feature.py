@@ -152,3 +152,10 @@ def test_report(tmp_path, state):
 
 def test_report_sin_salida_del_modelo(tmp_path):
     assert "Resumen" not in f.report("failed", str(tmp_path / "no-existe.json"))
+
+
+def test_pr_text_quita_el_prefijo_de_la_plantilla(tmp_path):
+    title, _ = f.pr_text(
+        "spec", 18, "[Petición] buscar productos", str(tmp_path / "x.json"), "s"
+    )
+    assert title == "spec: Buscar productos (#18)"
