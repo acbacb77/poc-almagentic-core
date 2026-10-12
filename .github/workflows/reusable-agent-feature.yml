@@ -261,14 +261,14 @@ jobs:
         with:
           name: feature-${{ inputs.phase }}-${{ github.run_id }}-${{ github.run_attempt }}
 
-      - name: main con la identidad del agente
+      - name: main (solo lectura; el commit se publica por la API)
         if: needs.work.result == 'success' && needs.work.outputs.allowed == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.work.outputs.base-sha }}
           path: app
           fetch-depth: 0
-          token: ${{ steps.token.outputs.token }}
+          persist-credentials: false
 
       - name: Revisar, subir, abrir el PR y avisar en el issue
         env:
@@ -280,6 +280,7 @@ jobs:
           ALLOWED: ${{ needs.work.outputs.allowed }}
           WORK_RESULT: ${{ needs.work.result }}
           AGENT: ${{ inputs.agent-login }}
+          BASE_SHA: ${{ needs.work.outputs.base-sha }}
           BASE_BRANCH: ${{ github.event.repository.default_branch }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
@@ -306,7 +307,6 @@ jobs:
           fi
 
           cd "$W/app"
-          git switch -q -c "$BRANCH"
           git apply --index "$W/cambio.patch" || { report failed "$W/claude-output.json" --reason "el parche no se aplica sobre main" --run "$RUN_URL"; exit 1; }
           id=$(gh api "/users/$(jq -rn --arg a "$AGENT" '$a|@uri')" --jq .id)
           if [ "$PHASE" = spec ]; then msg="docs(spec): especificación de la petición #$N"; else msg="feat: implementación de la petición #$N"; fi
@@ -316,7 +316,11 @@ jobs:
             sed -n 's/^::error file=\([^:]*\)::\(.*\)$/\1: \2/p' "$W/problemas.txt" > "$W/problemas-legibles.txt"
             report rejected "$W/claude-output.json" --problems "$W/problemas-legibles.txt" --run "$RUN_URL"; exit 1
           fi
-          git push -q origin "HEAD:refs/heads/$BRANCH"
+          # Rama nueva desde la base y commit por la API de GitHub: sale firmado (Verified).
+          if ! python3 "$W/core/scripts/agent/api_commit.py" . "$REPO" "$BRANCH" "$BASE_SHA" --create-from "$BASE_SHA" > /dev/null 2> "$W/api.err"; then
+            cat "$W/api.err"; report failed "$W/claude-output.json" --reason "$(grep -o '::error[^:]*::.*' "$W/api.err" | tail -1 | sed 's/^::error[^:]*:://')" --run "$RUN_URL"; exit 1
+          fi
+          cat "$W/api.err"
 
           python3 "$F" pr "$PHASE" "$N" "$(jq -r .title "$W/issue.json")" "$W/claude-output.json" "$SPEC_DIR" \
             --title-file "$W/titulo.txt" --body-file "$W/cuerpo.md"
