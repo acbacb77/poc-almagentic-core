@@ -56,7 +56,8 @@ def test_ficheros_generados_fallan_aunque_los_suba_una_persona(repo, path):
 
 
 @pytest.mark.parametrize("path", [".github/workflows/ci.yml", ".claude/settings.json", ".specify/templates/spec-template.md",
-                                  ".devcontainer/devcontainer.json", "AGENTS.md", "CLAUDE.md", ".agent-standards-version"])
+                                  ".devcontainer/devcontainer.json", "AGENTS.md", "CLAUDE.md", ".agent-standards-version",
+                                  "Dockerfile", ".dockerignore"])
 def test_el_agente_no_toca_ficheros_protegidos(repo, path):
     base, head = change(repo, AGENT, {path: "x"})
     assert [p for p, _ in problems(base, head)] == [path]

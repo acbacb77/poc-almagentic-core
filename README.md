@@ -31,7 +31,7 @@ jobs:
   reusable-agent-review.yml   # revisor: compara el PR con su spec y comenta (tarea 8)
   reusable-agent-respond.yml  # atiende @claude en un PR y sube el cambio como el bot (tarea 8)
   reusable-agent-feature.yml  # aprobado → PR de spec; merge de la spec → PR de implementación (extensión F)
-  reusable-supply-chain.yml   # SBOM, firma, atestación (tarea 9)
+  reusable-supply-chain.yml   # imagen: prueba, SBOM, firma con cosign y atestaciones SLSA (tarea 9)
   reusable-promote.yml        # abre el PR en gitops (tarea 10)
   reusable-traceability.yml   # informe por release (tarea E)
 agent-standards/              # reglas, constitución y permisos base (tarea 3)
