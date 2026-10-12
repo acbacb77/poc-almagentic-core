@@ -27,3 +27,4 @@ jobs:
           uvx --with pytest==9.1.1 pytest -q agent-standards/hooks scripts/triage
           (cd scripts/security && uvx --with pytest==9.1.1 pytest -q)
           (cd scripts/agent && uvx --with pytest==9.1.1 pytest -q)
+          (cd scripts/supply-chain && uvx --with pytest==9.1.1 pytest -q)

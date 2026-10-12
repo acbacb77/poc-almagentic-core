@@ -5,7 +5,7 @@ Dos reglas que ningún escáner genérico cubre:
 1. Ficheros generados: cachés, entornos virtuales o artefactos de build no se
    versionan, los suba quien los suba.
 2. Gobierno del agente: si algún commit del rango es del agente, el PR no puede
-   tocar los ficheros que lo gobiernan (harness, workflows, Spec Kit) ni
+   tocar los ficheros que lo gobiernan (harness, workflows, Spec Kit, Dockerfile) ni
    debilitar la configuración de las comprobaciones en pyproject.toml.
    Las personas sí pueden; para ellas lo decide la revisión de Code Owners.
 
@@ -30,6 +30,8 @@ GENERATED = (
 AGENT_PROTECTED = (
     ".github/", ".claude/", ".devcontainer/", ".specify/",
     "AGENTS.md", "CLAUDE.md", ".agent-standards-version",
+    # Definen la imagen que se firma y se despliega (tarea 9).
+    "Dockerfile", ".dockerignore",
 )
 # Secciones de pyproject.toml que configuran las comprobaciones de CI.
 CHECK_SECTIONS = ("ruff", "mypy", "pytest", "coverage", "bandit")
