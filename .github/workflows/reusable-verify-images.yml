@@ -1,0 +1,79 @@
+# Check de gitops (tarea 10): ninguna imagen se despliega si no la firmó el pipeline de core
+# y no se construyó desde main de la aplicación.
+#
+# Renderiza cada carpeta de apps/ con kustomize, exige que todas las imágenes vayan por
+# digest y verifica procedencia SLSA, SBOM y firma de cosign de cada una.
+name: reusable-verify-images
+
+on:
+  workflow_call:
+    inputs:
+      apps-dir:
+        type: string
+        default: apps
+      source-repo:
+        description: Repositorio del que deben salir las imágenes
+        type: string
+        default: acbacb77/poc-almagentic-app
+      core-ref:
+        type: string
+        default: v1
+
+env:
+  SIGNER_WORKFLOW: acbacb77/poc-almagentic-core/.github/workflows/reusable-supply-chain.yml
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Estado deseado
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Scripts de core
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: acbacb77/poc-almagentic-core
+          ref: ${{ inputs.core-ref }}
+          path: .core
+          persist-credentials: false
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Imágenes por digest y firmadas por core
+        env:
+          APPS_DIR: ${{ inputs.apps-dir }}
+          SOURCE_REPO: ${{ inputs.source-repo }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          fail=0
+          : > imagenes.tsv
+          while IFS= read -r k; do
+            dir=$(dirname "$k")
+            kubectl kustomize "$dir" | python3 .core/scripts/promote/promote.py images >> imagenes.tsv
+          done < <(find "$APPS_DIR" -name kustomization.yaml | sort)
+          sort -u imagenes.tsv -o imagenes.tsv
+          [ -s imagenes.tsv ] || { echo "No hay imágenes en $APPS_DIR"; exit 0; }
+          {
+            echo "### Imágenes del estado deseado"
+            echo
+            echo "| Imagen | Commit de origen | Resultado |"
+            echo "|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          while IFS=$'\t' read -r ref state; do
+            if [ "$state" != fijada ]; then
+              echo "::error title=Imagen sin digest::${ref}: en gitops solo se despliega por digest"
+              echo "| \`${ref}\` | | ❌ sin digest |" >> "$GITHUB_STEP_SUMMARY"; fail=1; continue
+            fi
+            if commit=$(bash .core/scripts/promote/verify_image.sh "$ref"); then
+              echo "Verificada: $ref (commit $commit)"
+              echo "| \`${ref##*@}\` | ${commit:0:12} | ✅ procedencia, SBOM y firma |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "| \`${ref}\` | | ❌ no verificada |" >> "$GITHUB_STEP_SUMMARY"; fail=1
+            fi
+          done < imagenes.tsv
+          exit "$fail"
