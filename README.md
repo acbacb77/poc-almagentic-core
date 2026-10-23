@@ -34,6 +34,8 @@ jobs:
   reusable-supply-chain.yml   # imagen: prueba, SBOM, firma con cosign y atestaciones SLSA (tarea 9)
   reusable-promote.yml        # verifica la imagen y abre el PR de promoción en gitops (tarea 10)
   reusable-verify-images.yml  # check de gitops: imágenes por digest, firmadas por core y desde main (tarea 10)
+  reusable-release.yml        # versión de una app: semver, notas, etiqueta la imagen firmada sin reconstruir (tarea B)
+  release.yml                 # versiones de core: vX.Y.Z y mueve v1 en cada merge publicable (tarea B)
   reusable-traceability.yml   # informe por release (tarea E)
 agent-standards/              # reglas, constitución y permisos base (tarea 3)
 prompts/                      # instrucciones del revisor y del triage (tareas 8, A)
