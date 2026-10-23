@@ -2,7 +2,7 @@
 
 Registro de todo lo hecho en la POC: decisiones, pasos manuales, PRs y problemas resueltos. Se actualiza al cerrar cada tarea, junto con la [memoria del TFM](../tfm/README.md), que es requisito para cerrar la POC.
 
-**Última actualización:** 12 de octubre de 2026 · **Avance:** 11 de 18 tareas (1, 2, 3, A, 4, 5, 6, 7, 8, F y 9)
+**Última actualización:** 24 de octubre de 2026 · **Avance:** 12 de 18 tareas (1, 2, 3, A, 4, 5, 6, 7, 8, F, 9 y 10)
 
 **Cada tarea tiene sus prerrequisitos manuales y sus subtareas en orden.** **Leyenda de responsables:** Usuario 👤 (acción manual) · Claude 🤖 (sesión de trabajo) · Agente (bot `almagentic-agent` en el devcontainer) · Automático ⚙️ (GitHub Actions, Argo CD)
 
@@ -31,7 +31,7 @@ Registro de todo lo hecho en la POC: decisiones, pasos manuales, PRs y problemas
 | Secreto | Tarea | Dónde vive | Quién lo crea | Para qué |
 |---|---|---|---|---|
 | Clave de `almagentic-agent` | 2 (crear) · 3 (usar) | `%USERPROFILE%\.config\almagentic\agent\agent.pem` (o `~/.config/almagentic/agent/agent.pem` si el repo está dentro de WSL). **Nunca en un repo** | 👤 | Firmar el token de 1 hora del agente |
-| Clave de `almagentic-promoter-gitops` | 2 (crear) · 10 (usar) | `~/.config/almagentic/promoter.pem`, **fuera** de la carpeta `agent/` | 👤 | Se subirá como secreto de Actions en la tarea 10 |
+| Clave de `almagentic-promoter-gitops` | 2 (crear) · 10 (usar) | En el equipo, **fuera** de la carpeta `agent/`. En GitHub: app → Settings → Environments → **gitops-staging** → `PROMOTER_APP_PRIVATE_KEY` (solo rama `main`; nunca como secreto del repositorio) | 👤 | Token de una hora del promotor para abrir PRs en gitops |
 | `CLAUDE_CODE_OAUTH_TOKEN` | A | app → Settings → Secrets and variables → **Actions** | 👤 (`claude setup-token`) | Que el triage, el revisor y el agente en Actions usen la suscripción de Claude. Caduca al año |
 | `AGENT_APP_PRIVATE_KEY` | 8 · F | app → Settings → Secrets and variables → **Actions** (contenido completo del `.pem` del agente) | 👤 | Que el job `publish` de la respuesta a `@claude` pida el token de 1 hora de `almagentic-agent` |
 
@@ -39,7 +39,10 @@ Registro de todo lo hecho en la POC: decisiones, pasos manuales, PRs y problemas
 
 | Etiqueta | Apunta a | Creada por | Notas |
 |---|---|---|---|
-| `v1` | `89832cf` (core#19) | 👤 release desde la UI | Etiqueta móvil que usan las apps. Se mueve a cada `main` nueva de core. Automatizar en la tarea B |
+| `v1` | `8f0ad27` (core#23) | 👤 release desde la UI | Etiqueta móvil que usan las apps. Se mueve a cada `main` nueva de core. Automatizar en la tarea B |
+| `v1.7.2` | `8f0ad27` (core#23) | 👤 | Clave del promotor pasada explícitamente |
+| `v1.7.1` | `1264008` (core#22) | 👤 | Comprobación de la clave del promotor |
+| `v1.7.0` | `dc1165e` (core#21) | 👤 | Promoción a gitops y check de imágenes |
 | `v1.6.0` | `89832cf` (core#19) | 👤 | Commits del agente verificados |
 | `v1.5.1` | `3d44a36` (core#18) | 👤 | Arreglo de permisos de la publicación |
 | `v1.5.0` | `25d79a9` (core#17) | 👤 | Cadena de suministro de la imagen |
@@ -67,8 +70,8 @@ Las tareas con letra son **extensiones ALM**: se añadieron al plan original y s
 | **8** | Agente revisor y respuesta a @claude | Principal | ✅ Hecha |
 | ↳ F | Agente autónomo en Actions | Extensión ALM (entre 8 y 9) | ✅ Hecha |
 | **9** | Supply chain | Principal | ✅ Hecha |
-| **10** | Deploy GitOps con gate humano | Principal | ⏭️ Siguiente |
-| ↳ B | Gestión de releases | Extensión ALM (entre 10 y 11) | Pendiente |
+| **10** | Deploy GitOps con gate humano | Principal | ✅ Hecha |
+| ↳ B | Gestión de releases | Extensión ALM (entre 10 y 11) | ⏭️ Siguiente |
 | **11** | Cerrar el loop de operación | Principal | Pendiente |
 | ↳ C | Mantenimiento continuo | Extensión ALM (entre 11 y 12) | Pendiente |
 | ↳ D | Retirada de un endpoint v1 | Extensión ALM (entre 11 y 12) | Pendiente |
@@ -468,32 +471,42 @@ Imagen de la API probada, con SBOM, firmada con cosign y con atestaciones de pro
 
 ---
 
-## Tarea 10 · Deploy GitOps con gate humano ⏭️
+## Tarea 10 · Deploy GitOps con gate humano ✅
 
-El bot promotor abre un PR en gitops; tu merge despliega con Argo CD en el cluster local.
+Cada imagen firmada de main la verifica el bot promotor, que abre un PR en gitops con su digest y los commits que entran. Fusionar ese PR aprueba el despliegue y Argo CD sincroniza staging. Un check obligatorio impide desplegar imágenes no firmadas por core.
 
 ### Prerrequisitos manuales
 
-- ⬜ Kubernetes activado en Docker Desktop con 8 GB
-- ⬜ Argo CD instalado y bootstrap/root-app.yaml aplicado
-- ⬜ Clave del promotor como secreto de Actions en app
+- ✅ Kubernetes activado en Docker Desktop con 8 GB
+- ✅ Argo CD v3.5.4 instalado y bootstrap/root-app.yaml aplicado
+- ✅ Entorno gitops-staging en app (solo main) con PROMOTER_APP_PRIVATE_KEY
+- ✅ verify / images obligatorio en el ruleset de main de gitops
 
 ### Subtareas
 
 | # | Subtarea | Quién | Estado | Enlaces |
 |---|---|---|---|---|
-| 10.1 | Manifiestos de la app en gitops | Claude 🤖 | ⬜ |  |
-| 10.2 | Workflow de promoción en core | Claude 🤖 | ⬜ |  |
-| 10.3 | Aprobar el PR de promoción en gitops | Usuario 👤 | ⬜ |  |
-| 10.4 | Argo CD sincroniza el cluster | Automático ⚙️ | ⬜ |  |
+| 10.1 | Promotor y check de imágenes en core (verificación de procedencia desde main, SBOM y firma) | Claude 🤖 | ✅ | [core#21](https://github.com/acbacb77/poc-almagentic-core/pull/21) |
+| 10.2 | Manifiestos de la API por digest, aplicación de Argo CD y check en gitops | Claude 🤖 | ✅ | [gitops#1](https://github.com/acbacb77/poc-almagentic-gitops/pull/1) |
+| 10.3 | Service como LoadBalancer en el puerto 8000 | Claude 🤖 | ✅ | [gitops#2](https://github.com/acbacb77/poc-almagentic-gitops/pull/2) |
+| 10.4 | Job promote en app | Claude 🤖 | ✅ | [app#23](https://github.com/acbacb77/poc-almagentic-app/pull/23) |
+| 10.5 | Arreglos: secreto del entorno pasado explícitamente y relanzar a mano | Claude 🤖 | ✅ | [core#22](https://github.com/acbacb77/poc-almagentic-core/pull/22) · [core#23](https://github.com/acbacb77/poc-almagentic-core/pull/23) · [app#24](https://github.com/acbacb77/poc-almagentic-app/pull/24) |
+| 10.6 | Desbloqueo: certifi con vulnerabilidad nueva | Claude 🤖 | ✅ | [app#25](https://github.com/acbacb77/poc-almagentic-app/pull/25) |
+| 10.7 | Aprobar el primer PR de promoción | Usuario 👤 | ✅ | [gitops#3](https://github.com/acbacb77/poc-almagentic-gitops/pull/3) |
+| 10.8 | Argo CD sincroniza staging | Automático ⚙️ | ✅ |  |
+| 10.9 | Prueba: imagen sin firma de core bloqueada | Claude 🤖 | ✅ | [gitops#4](https://github.com/acbacb77/poc-almagentic-gitops/pull/4) |
 
 ### Detalle
 
-**Cómo preparar el cluster**: pasos en el [README de gitops](https://github.com/acbacb77/poc-almagentic-gitops#puesta-en-marcha-una-sola-vez).
+**Cómo preparar el cluster**: pasos en el [README de gitops](https://github.com/acbacb77/poc-almagentic-gitops#puesta-en-marcha-una-sola-vez). La API queda en `localhost:8000` (o `host.docker.internal:8000`).
+
+**Flujo**: merge en app → imagen firmada → el promotor verifica procedencia desde main, SBOM y firma → PR en gitops con el digest y los commits → `verify / images` → **tu aprobación y merge** → Argo CD sincroniza staging. Para volver atrás, revertir el PR de promoción. Para relanzar: Actions → supply-chain → Run workflow (un *Re-run* repite la versión antigua de core).
+
+**Problemas típicos**: sin `root-app.yaml` aplicado Argo CD no ve nada. La clave del promotor vive solo en el entorno `gitops-staging` y app tiene que pasarla explícitamente al workflow de core. «A JSON web token could not be decoded» = clave mal pegada.
 
 ---
 
-> ## ↳ Tarea B · Gestión de releases ⬜
+> ## ↳ Tarea B · Gestión de releases ⏭️
 >
 > **Extensión ALM** · se ejecuta entre la tarea 10 y la 11.
 >
@@ -510,8 +523,6 @@ El bot promotor abre un PR en gitops; tu merge despliega con Argo CD en el clust
 > | B.1 | Versionado y notas de versión con release-please | Claude 🤖 | ⬜ |  |
 > | B.2 | Automatizar las etiquetas de core (vX.Y.Z y mover v1) | Claude 🤖 | ⬜ |  |
 > | B.3 | Hasta entonces, crear o mover etiquetas de core a mano | Usuario 👤 | ⬜ |  |
->
-> _Subtareas previstas: se ajustarán al llegar a la tarea._
 
 ---
 
@@ -646,6 +657,13 @@ _Subtareas previstas: se ajustarán al llegar a la tarea._
 | `image / build` falla en «Imágenes base fijadas por digest» | El `Dockerfile` usa una etiqueta sin digest | Copiar a `FROM` el digest que trae la anotación |
 | `release / publish` falla al subir a GHCR | Con `permissions: {}` a nivel de workflow, el job reutilizable sin permisos propios hereda ese bloque vacío | Quitar el bloque (core#18) y *Re-run all jobs* |
 | `image / publish` y `release` aparecen omitidos en un PR | La publicación solo corre en main | Es lo esperado |
+| Argo CD no muestra ninguna aplicación ni existe `staging` | No se aplicó `bootstrap/root-app.yaml` | `kubectl apply -f …/bootstrap/root-app.yaml` |
+| `read: -p: no coprocess` | La terminal es zsh | `printf 'Contraseña: '; read -s P; echo` |
+| `promote` falla: la clave del promotor llega vacía | Un workflow reutilizable de otro repo no ve el secreto del entorno si app no se lo pasa | Declararlo en core y pasarlo explícitamente desde app (core#23, app#24) |
+| *Re-run* no recoge un arreglo de core | Repite la versión de los workflows reutilizables de la ejecución original | Actions → supply-chain → **Run workflow** (app#24) |
+| «A JSON web token could not be decoded» | Clave `.pem` mal pegada (saltos de línea o `BEGIN`/`END`) | Volver a pegarla entera, o subirla con `gh secret set … < fichero.pem` |
+| `security / dependencies` falla en un PR que no toca dependencias | Vulnerabilidad nueva publicada en una dependencia (certifi, PYSEC-2026-4320) | Actualizarla en `uv.lock` (app#25); en la tarea C se automatiza |
+| Mismo commit, digest distinto | La imagen no es reproducible byte a byte | Cerrar la promoción redundante; mejora: promocionar sin reconstruir |
 
 ---
 
@@ -661,4 +679,7 @@ _Subtareas previstas: se ajustarán al llegar a la tarea._
 
 - Triage: mostrar en el comentario el motivo cuando el modelo devuelve un error (p. ej. el 401).
 - Revisor (app#15): fijar por SHA los workflows reutilizables que reciben secretos (tarea B).
-- Despliegue (tarea 10): desplegar la imagen por digest y verificar su firma antes de desplegar.
+- Tarea 11: servir `/metrics` en un puerto aparte que el `LoadBalancer` no publique.
+- `actions/create-github-app-token`: `app-id` está obsoleto, usar `client-id` (tarea B).
+- Promocionar sin reconstruir la imagen o construcción reproducible (digests distintos para el mismo commit).
+- Argo CD: valorar verificación de firmas también dentro del clúster (Kyverno o policy-controller).

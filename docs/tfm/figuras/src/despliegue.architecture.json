@@ -1,0 +1,225 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Despliegue GitOps con aprobación humana",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "external": {
+          "label": "Persona o entrada"
+        },
+        "backend": {
+          "label": "Agente o proceso"
+        },
+        "security": {
+          "label": "Control o aprobación"
+        },
+        "frontend": {
+          "label": "Artefacto en GitHub"
+        },
+        "database": {
+          "label": "Estado en git"
+        },
+        "messagebus": {
+          "label": "Bot de promoción"
+        },
+        "cloud": {
+          "label": "Clúster"
+        }
+      }
+    }
+  },
+  "components": [
+    {
+      "id": "merge",
+      "type": "external",
+      "label": "Merge en app",
+      "sublabel": "rama main",
+      "pos": [
+        40,
+        50
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "publica",
+      "type": "backend",
+      "label": "Publicación",
+      "sublabel": "imagen firmada",
+      "pos": [
+        260,
+        50
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "promotor",
+      "type": "messagebus",
+      "label": "Promotor",
+      "sublabel": "verifica y propone",
+      "pos": [
+        480,
+        50
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "pr",
+      "type": "frontend",
+      "label": "PR en gitops",
+      "sublabel": "digest y commits",
+      "pos": [
+        480,
+        190
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "check",
+      "type": "security",
+      "label": "verify / images",
+      "sublabel": "firma y origen",
+      "pos": [
+        260,
+        190
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "aprueba",
+      "type": "security",
+      "label": "Aprobación",
+      "sublabel": "merge humano",
+      "pos": [
+        40,
+        190
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "argo",
+      "type": "cloud",
+      "label": "Argo CD",
+      "sublabel": "sincroniza",
+      "pos": [
+        40,
+        330
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "staging",
+      "type": "cloud",
+      "label": "staging",
+      "sublabel": "sin root, :8000",
+      "pos": [
+        260,
+        330
+      ],
+      "size": [
+        140,
+        56
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Actions de app",
+      "wraps": [
+        "merge",
+        "publica",
+        "promotor"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Repo gitops",
+      "wraps": [
+        "pr",
+        "check",
+        "aprueba"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Clúster local",
+      "wraps": [
+        "argo",
+        "staging"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "e1",
+      "from": "merge",
+      "to": "publica"
+    },
+    {
+      "id": "e2",
+      "from": "publica",
+      "to": "promotor"
+    },
+    {
+      "id": "e3",
+      "from": "promotor",
+      "to": "pr",
+      "label": "token 1 h",
+      "labelAt": [
+        550,
+        148
+      ]
+    },
+    {
+      "id": "e4",
+      "from": "pr",
+      "to": "check"
+    },
+    {
+      "id": "e5",
+      "from": "check",
+      "to": "aprueba",
+      "label": "en verde"
+    },
+    {
+      "id": "e6",
+      "from": "aprueba",
+      "to": "argo",
+      "label": "main de gitops",
+      "labelAt": [
+        110,
+        288
+      ]
+    },
+    {
+      "id": "e7",
+      "from": "argo",
+      "to": "staging",
+      "label": "por digest"
+    }
+  ]
+}

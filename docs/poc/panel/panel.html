@@ -1071,47 +1071,129 @@ const TASKS = [
   "id": "10",
   "title": "Deploy GitOps con gate humano",
   "phase": "Entrega",
-  "status": "next",
-  "desc": "El bot promotor abre un PR en gitops; tu merge despliega con Argo CD en el cluster local.",
+  "status": "done",
+  "desc": "Cada imagen firmada de main la verifica el bot promotor, que abre un PR en gitops con su digest y los commits que entran. Fusionar ese PR aprueba el despliegue y Argo CD sincroniza staging. Un check obligatorio impide desplegar imágenes no firmadas por core.",
   "alm": null,
   "prereqs": [
    [
     "Kubernetes activado en Docker Desktop con 8 GB",
-    false
+    true
    ],
    [
-    "Argo CD instalado y bootstrap/root-app.yaml aplicado",
-    false
+    "Argo CD v3.5.4 instalado y bootstrap/root-app.yaml aplicado",
+    true
    ],
    [
-    "Clave del promotor como secreto de Actions en app",
-    false
+    "Entorno gitops-staging en app (solo main) con PROMOTER_APP_PRIVATE_KEY",
+    true
+   ],
+   [
+    "verify / images obligatorio en el ruleset de main de gitops",
+    true
    ]
   ],
   "subs": [
    [
-    "Manifiestos de la app en gitops",
+    "Promotor y check de imágenes en core (verificación de procedencia desde main, SBOM y firma)",
     "claude",
-    false,
-    []
+    true,
+    [
+     {
+      "label": "core#21",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/21"
+     }
+    ]
    ],
    [
-    "Workflow de promoción en core",
+    "Manifiestos de la API por digest, aplicación de Argo CD y check en gitops",
     "claude",
-    false,
-    []
+    true,
+    [
+     {
+      "label": "gitops#1",
+      "href": "https://github.com/acbacb77/poc-almagentic-gitops/pull/1"
+     }
+    ]
    ],
    [
-    "Aprobar el PR de promoción en gitops",
+    "Service como LoadBalancer en el puerto 8000",
+    "claude",
+    true,
+    [
+     {
+      "label": "gitops#2",
+      "href": "https://github.com/acbacb77/poc-almagentic-gitops/pull/2"
+     }
+    ]
+   ],
+   [
+    "Job promote en app",
+    "claude",
+    true,
+    [
+     {
+      "label": "app#23",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/23"
+     }
+    ]
+   ],
+   [
+    "Arreglos: secreto del entorno pasado explícitamente y relanzar a mano",
+    "claude",
+    true,
+    [
+     {
+      "label": "core#22",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/22"
+     },
+     {
+      "label": "core#23",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/23"
+     },
+     {
+      "label": "app#24",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/24"
+     }
+    ]
+   ],
+   [
+    "Desbloqueo: certifi con vulnerabilidad nueva",
+    "claude",
+    true,
+    [
+     {
+      "label": "app#25",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/25"
+     }
+    ]
+   ],
+   [
+    "Aprobar el primer PR de promoción",
     "usuario",
-    false,
+    true,
+    [
+     {
+      "label": "gitops#3",
+      "href": "https://github.com/acbacb77/poc-almagentic-gitops/pull/3"
+     }
+    ]
+   ],
+   [
+    "Argo CD sincroniza staging",
+    "auto",
+    true,
     []
    ],
    [
-    "Argo CD sincroniza el cluster",
-    "auto",
-    false,
-    []
+    "Prueba: imagen sin firma de core bloqueada",
+    "claude",
+    true,
+    [
+     {
+      "label": "gitops#4",
+      "href": "https://github.com/acbacb77/poc-almagentic-gitops/pull/4"
+     }
+    ]
    ]
   ]
  },
@@ -1119,7 +1201,7 @@ const TASKS = [
   "id": "B",
   "title": "Gestión de releases",
   "phase": "Entrega",
-  "status": "todo",
+  "status": "next",
   "desc": "Versionado semántico, changelog y notas; automatizar las etiquetas de core.",
   "alm": [
    "10",
