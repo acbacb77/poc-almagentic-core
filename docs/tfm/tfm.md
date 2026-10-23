@@ -2,7 +2,7 @@
 
 Los agentes de IA actuales planifican, escriben código, ejecutan herramientas y abren *pull requests*. Con ellos, el ingeniero deja de ejecutar cada fase del ciclo de vida del software y pasa a definir la intención y a supervisar y validar el trabajo de los agentes. Se gana velocidad, pero aparecen riesgos nuevos. Un agente con permisos de escritura que lee texto no confiable (issues, comentarios, páginas web) puede ser manipulado mediante *prompt injection*, heredar las credenciales de una persona o modificar los controles que deberían vigilarlo.
 
-Este Trabajo Fin de Máster diseña y construye una prueba de concepto (POC) de ALM agéntico: un ciclo de vida de aplicaciones completo, desde que entra una petición hasta que se retira una versión de la API, en el que agentes basados en modelos de lenguaje (Claude) hacen el trabajo y las personas conservan las decisiones importantes. La solución tiene cuatro piezas. Hay tres repositorios con responsabilidades separadas (aplicación, plataforma y GitOps) y dos identidades no humanas de mínimo privilegio (GitHub Apps con tokens de una hora). El agente de código trabaja dentro de un *harness* de siete capas de defensa. Y el triage sigue un patrón que separa pensar de actuar: el modelo propone sin herramientas ni permisos, y un script determinista valida la propuesta y la aplica. El mismo patrón se usa en los PRs, donde un segundo agente revisa cada cambio contra la especificación y un colaborador puede pedir correcciones al agente de código con un comentario `@claude`. Por último, la aprobación de una petición y el merge de su especificación lanzan al agente sin que nadie le escriba un prompt; en la prueba, una feature completa pasó de petición a cierre en 25 minutos. La imagen resultante sale probada, firmada y con su procedencia y su SBOM verificables, y los commits del agente salen firmados por GitHub.
+Este Trabajo Fin de Máster diseña y construye una prueba de concepto (POC) de ALM agéntico: un ciclo de vida de aplicaciones completo, desde que entra una petición hasta que se retira una versión de la API, en el que agentes basados en modelos de lenguaje (Claude) hacen el trabajo y las personas conservan las decisiones importantes. La solución tiene cuatro piezas. Hay tres repositorios con responsabilidades separadas (aplicación, plataforma y GitOps) y dos identidades no humanas de mínimo privilegio (GitHub Apps con tokens de una hora). El agente de código trabaja dentro de un *harness* de siete capas de defensa. Y el triage sigue un patrón que separa pensar de actuar: el modelo propone sin herramientas ni permisos, y un script determinista valida la propuesta y la aplica. El mismo patrón se usa en los PRs, donde un segundo agente revisa cada cambio contra la especificación y un colaborador puede pedir correcciones al agente de código con un comentario `@claude`. Por último, la aprobación de una petición y el merge de su especificación lanzan al agente sin que nadie le escriba un prompt; en la prueba, una feature completa pasó de petición a cierre en 25 minutos. La imagen resultante sale probada, firmada y con su procedencia y su SBOM verificables, y los commits del agente salen firmados por GitHub. El despliegue a staging se hace por GitOps: un bot propone, un check verifica la firma y el origen, y una persona aprueba con un merge.
 
 El documento recoge el problema, el estado del arte, las decisiones de diseño con sus alternativas, la implementación, el registro completo de iteraciones con los modelos y los resultados de las pruebas. Entre esas pruebas hay un intento de *prompt injection* que el sistema detecta y neutraliza. La documentación técnica permite reproducir la POC desde cero.
 
@@ -601,9 +601,51 @@ Los commits del bot salían con `verified: false`. El job `publish` hacía `git 
 
 La prueba fue un `@claude` en app#22 que pedía al agente la mejora que había sugerido el revisor en app#16: que el test de `Cache-Control` no dependiera de un producto concreto del catálogo. El commit del agente salió con `verified: true`. Con esto, la cadena queda verificable de punta a punta: el commit del agente lo firma GitHub, la imagen la firma el pipeline de core y la procedencia une los dos.
 
+## Tarea 10: despliegue GitOps con aprobación humana
+
+Con la imagen firmada, falta desplegarla de forma que una persona decida qué entra y que nada sin firma pueda entrar. La tarea 10 lo resuelve con el modelo *pull* de GitOps: el clúster no recibe órdenes de GitHub, sino que Argo CD, dentro del clúster, lee el estado deseado del repositorio gitops y lo aplica. La única forma de cambiar lo que corre en staging es fusionar un PR en gitops, y ese merge es el gate humano.
+
+![Figura 9. Despliegue: el promotor propone, el check verifica, una persona aprueba y Argo CD aplica.](figuras/despliegue.png)
+
+| Pieza | Repositorio | Qué hace |
+|---|---|---|
+| `apps/poc-almagentic-app/` | gitops | La API en staging. La imagen va **por digest** en `kustomization.yaml`, nunca por etiqueta. El pod corre sin root, con el sistema de ficheros en solo lectura, sin capacidades ni token de cuenta de servicio, y con sondas en `/health` |
+| `argocd-apps/poc-almagentic-app-staging.yaml` | gitops | Aplicación de Argo CD con sincronización automática y `selfHeal`: un cambio hecho a mano en el clúster se deshace en segundos |
+| `verify.yml` y `reusable-verify-images.yml` | gitops y core | Check obligatorio `verify / images`. Renderiza `apps/` y exige que cada imagen vaya por digest, que su procedencia diga que se construyó **desde main de app** con el pipeline de core y que tenga SBOM y firma de cosign del mismo workflow |
+| `reusable-promote.yml` y job `promote` | core y app | Tras publicar la imagen, el promotor la verifica con el mismo script, pide un token de una hora de su GitHub App (instalada solo en gitops) y abre un PR que cambia el digest. El commit se publica por la API, así que sale verificado |
+
+El PR de promoción está pensado para que quien lo aprueba sepa qué despliega. Muestra el digest actual y el propuesto, el commit de app del que sale cada uno (leído de la procedencia firmada, no de una etiqueta) y la lista de commits de app que entran. Para volver atrás basta con revertir ese PR.
+
+La clave del promotor vive en un **entorno** de GitHub de app, `gitops-staging`, que solo admite la rama `main`. Ningún PR, ni del agente ni de una persona, puede ejecutar un workflow que la lea.
+
+### Puesta en marcha
+
+El clúster es el Kubernetes de Docker Desktop del responsable, con Argo CD v3.5.4, fijado en lugar de `stable`. Hubo cuatro incidencias:
+
+| Incidencia | Causa | Solución |
+|---|---|---|
+| Argo CD sin aplicaciones y sin namespace `staging` | No se había aplicado `bootstrap/root-app.yaml` | Aplicarlo; las tres aplicaciones pasaron a `Synced` y `Healthy` |
+| La clave del promotor llegaba vacía al job | Un workflow reutilizable de otro repositorio no ve el secreto del entorno solo con declarar `environment` | Declararlo como secreto de entrada en core y pasarlo explícitamente desde app. Dentro de core, GitHub usa el valor del entorno |
+| *Re-run* no recogía el arreglo de core | Un *Re-run* repite la versión de los workflows reutilizables de la ejecución original | Disparador manual (`workflow_dispatch`) en app |
+| «A JSON web token could not be decoded» | La clave `.pem` se había pegado mal en el formulario | Volver a pegarla entera |
+
+Además, un PR que no tocaba dependencias quedó bloqueado por `security / dependencies`: se había publicado una vulnerabilidad en certifi (PYSEC-2026-4320). certifi solo llegaba por las dependencias de los tests y nunca estuvo en la imagen, pero el escaneo audita todo `uv.lock` y bloqueó como debía. Se actualizó en app#25.
+
+El responsable pidió dos cambios sobre la marcha. Quiso un usuario propio en la consola de Argo CD en lugar de `admin`. El asistente explicó que la contraseña se guarda como hash bcrypt y no en base64, y la generó con el binario `argocd` del propio pod, sin instalar nada en el equipo. También prefirió publicar el servicio como `LoadBalancer` en el puerto 8000 en vez de usar `port-forward`. El cambio se hizo con un PR en gitops (un `kubectl edit` lo habría deshecho Argo CD), y queda anotado el coste: también expone `/metrics`, que en la tarea 11 pasará a un puerto aparte.
+
+### Resultado
+
+| Prueba | Resultado |
+|---|---|
+| Primera promoción (gitops#3) | El promotor abrió el PR con el digest, los commits de app que entraban y un commit verificado. `verify / images` pasó, el responsable lo aprobó como revisor (sin *bypass*, porque el autor era el bot) y Argo CD desplegó el nuevo digest. La API respondió desde el equipo |
+| Imagen no firmada por core (gitops#4) | Un `Deployment` con `python:3.12-slim-bookworm` fijada por digest. `verify / images` falló con «Procedencia no válida» y GitHub bloqueó el merge |
+| Clave solo en el entorno | Con la clave únicamente en `gitops-staging`, una ejecución manual promovió sin problemas |
+
+Una última observación: al relanzar la publicación del mismo commit salió otro digest, porque la imagen no es reproducible byte a byte. La promoción redundante se cerró, y queda como mejora promocionar sin reconstruir o hacer la construcción reproducible.
+
 ## Tareas pendientes
 
-> Las secciones de las tareas 10 a 12 y de las extensiones B a E se añadirán a medida que se implementen: despliegue GitOps, *releases*, operación, mantenimiento, retirada y trazabilidad.
+> Las secciones de las tareas 11 y 12 y de las extensiones B a E se añadirán a medida que se implementen: *releases*, operación, mantenimiento, retirada y trazabilidad.
 
 # Iteraciones con modelos, pruebas y resultados
 
@@ -785,6 +827,30 @@ El registro que sigue resume toda la conversación del proyecto. Se han omitido 
 | 84 | «El package es público; vamos a lo del unverified» | Escribe `api_commit.py` con 5 tests, cambia los dos jobs `publish` y quita el token de sus checkouts. Abre core#19 y el PR de prueba app#22 | Commits firmados preparados |
 | 85 | «Ha respondido, pero se han saltado 2 checks» | Explica que los checks omitidos son los de publicación, que solo corren en main. Comprueba `verified: true` en el commit del bot y cierra la tarea | Tarea 9 cerrada |
 
+### Fase 15 · Despliegue GitOps (18 a 24 de octubre)
+
+| # | Petición del autor | Respuesta y acción del modelo | Resultado |
+|---|---|---|---|
+| 86 | «Continuamos» | Diseña la tarea 10: despliegue por digest, promotor que verifica antes de proponer y check obligatorio en gitops. Escribe `promote.py` (7 tests) y `verify_image.sh`, valida los manifiestos con kustomize y abre core#21, gitops#1 y app#23 | Tarea 10 preparada |
+| 87 | «1 y 2 ok» (core#21 y entorno creado) | Relanza el check de gitops (en verde con la imagen actual), le da el nombre `verify / images` y detalla los pasos del clúster | Check listo |
+| 88 | «Quiero crear otro usuario y otra contraseña» | Explica las cuentas locales de Argo CD (`argocd-cm`, `argocd-rbac-cm`, `argocd-secret`) y cómo desactivar `admin` sin quedarse fuera | Usuario propio |
+| 89 | «No quiero usar herramientas externas; generaré el hash a mano con base64» | Aclara que base64 no es un hash y que Argo CD exige bcrypt; propone generarlo con el binario `argocd` del pod | Hash sin instalar nada |
+| 90 | «read: -p: no coprocess» | Detecta zsh y da la forma portable de leer la contraseña | Usuario creado |
+| 91 | «Listo, continuamos» | Comprueba gitops#1 fusionado y pide verificar la imagen desplegada | |
+| 92 | «Ni hay aplicaciones ni existe el namespace staging» | Diagnostica que falta `root-app.yaml` y da los comandos de comprobación | |
+| 93 | Salida de `kubectl get applications -w` | Interpreta la secuencia `Missing` → `Synced` y `Healthy` | Staging desplegado |
+| 94 | «No quiero hacer port-forward; si publico el svc como LoadBalancer puedo consumirlo» | Lo hace por PR en gitops (gitops#2) y explica que expone `/metrics` | API en el puerto 8000 |
+| 95 | «Listo» y `curl` a `host.docker.internal:8000` | Confirma la búsqueda en el clúster y recuerda fusionar app#23 | |
+| 96 | «Merged» | Sigue la ejecución: la imagen se publica, pero la clave llega vacía. Abre core#22 con una comprobación previa | |
+| 97 | «Vuelve a fallar» | Comprueba que el *Re-run* repitió la versión antigua de core y añade el disparador manual (app#24) | |
+| 98 | «Han fallado los checks de #24» | Reproduce el fallo: vulnerabilidad nueva en certifi, solo en dependencias de test. Abre app#25 | Desbloqueado |
+| 99 | «Merged» | Con la comprobación nueva, confirma que la clave no llega y consulta la documentación de GitHub | |
+| 100 | «Veo el secreto en Environments» | Concluye que hay que pasar la clave explícitamente (core#23 y app#24) | |
+| 101 | «El promote sigue fallando: JWT could not be decoded» | Interpreta el error como clave corrupta y propone regenerarla y subirla con `gh secret set` | |
+| 102 | «Olvida, he vuelto a pegar la clave y ya ha funcionado» | Revisa gitops#3: commit verificado, digest, commits que entran y check en verde | Primera promoción |
+| 103 | «Merged y validado que se ha desplegado» | Abre gitops#4 con una imagen no firmada: bloqueado | Bloqueo comprobado |
+| 104 | «En Repository secrets nunca hubo nada; relanzado y ok» | Concluye que la clave solo en el entorno basta, detecta que el mismo commit dio otro digest y cierra la tarea | Tarea 10 cerrada |
+
 ## Pruebas realizadas y resultados
 
 ### Pruebas automáticas
@@ -798,6 +864,9 @@ El registro que sigue resume toda la conversación del proyecto. Se han omitido 
 | Escaneo de seguridad obligatorio (app#14) | PR con un `.pyc` en `__pycache__` | `governance` en rojo y merge bloqueado |
 | Agentes en Actions (`scripts/agent`) | 46 casos. Revisor y respuesta (16): publicación y fallo seguro de la revisión, hallazgos fuera del PR, orden por severidad, neutralización, sospecha de inyección, separación de instrucción y datos en los prompts e informes de respuesta. Agente autónomo (25): comprobaciones previas, prompt con datos, nombres de rama, alcance de la fase spec, textos del PR e informes. Commits por la API (5): altas, cambios y bajas, binarios, rechazo de ejecutables y enlaces, entrada de la mutación | 46/46 superadas |
 | Respuesta a `@claude` (app#16) | PR con tres tests de FR-009 que fallan y un comentario `@claude` | Commit del bot en 73 s, checks en verde, revisión publicada y sin bucle del bot |
+| Promoción (`promote.py`) | 7 casos: imágenes fijadas o no en manifiestos renderizados, cambio de digest de una sola imagen, errores y digest sin cambios | 7/7 superadas |
+| Promoción real (gitops#3) | Merge en app con imagen nueva | PR del bot verificado, check en verde, aprobación humana y despliegue por Argo CD |
+| Imagen no firmada (gitops#4) | `python:3.12-slim-bookworm` por digest en `apps/` | `verify / images` en rojo («Procedencia no válida») y merge bloqueado |
 | Imágenes base (`base_images.py`) | 8 casos: etapas, `scratch`, digest incompleto, variables en `FROM`, líneas partidas | 8/8 superadas |
 | Cadena de suministro (app#21 y main) | Imagen sin digest en la base; imagen arrancada con búsqueda; publicación en main | CI en rojo con el digest correcto; prueba de humo superada; imagen firmada con dos atestaciones verificadas |
 | Commit verificado (app#22) | `@claude` en un PR tras el cambio a la API | `verified: true` (`valid`) |
@@ -845,21 +914,24 @@ El caso de inyección prueba el diseño en dos niveles. El modelo detectó el in
 | Falso positivo del revisor sobre Unicode | El revisor lee el diff como texto | Se comprobaron los bytes | Los hallazgos del revisor se verifican antes de actuar |
 | Digests de las imágenes base | La sesión no llega a Docker Hub ni a GHCR | El CI los resuelve y los devuelve en la anotación del fallo | Un control que falla con la solución en el mensaje ahorra el paso manual |
 | La publicación no podía subir a GHCR | `permissions: {}` a nivel de workflow heredado por el job reutilizable | Quitar el bloque (core#18) | En los workflows reutilizables la herencia de permisos no es la intuitiva; hay que probar en main |
+| Clave del promotor vacía en el job | Workflow reutilizable de otro repo y secreto de entorno | Declararlo en core y pasarlo desde app | La documentación no lo deja claro; hubo que probar tres configuraciones |
+| *Re-run* sin el arreglo de core | Un *Re-run* repite los workflows de la ejecución original | Disparador manual | Para probar un cambio de core hace falta una ejecución nueva |
+| Vulnerabilidad nueva en certifi | Publicada entre dos ejecuciones | Actualizar `uv.lock` | Un check puede romperse sin cambiar el código; lo aborda la tarea C |
 | Prefijo «[Petición]» en los títulos de los PRs | El script copiaba el título del issue | Se quita el prefijo (core#15) | Los detalles de presentación también salen al usarlo de verdad |
 
 ## Métricas del proceso
 
 | Métrica | Valor |
 |---|---|
-| Tareas completadas | 11 de 18 (1, 2, 3, A, 4, 5, 6, 7, 8, F y 9) |
-| PRs fusionados | 29 (12 en core y 17 en app; cuatro abiertos por el agente y cuatro con commits suyos pedidos con `@claude`), más la documentación |
-| Pruebas automáticas | 237 superadas (57 de harness y triage, 23 de gobierno de PRs, 46 de los agentes en Actions, 8 de la cadena de suministro, 103 de la aplicación) |
-| Iteraciones registradas con el asistente | 85 |
+| Tareas completadas | 12 de 18 (1, 2, 3, A, 4, 5, 6, 7, 8, F, 9 y 10) |
+| PRs fusionados | 38 (15 en core, 20 en app y 3 en gitops; cuatro abiertos por el agente, cuatro con commits suyos pedidos con `@claude` y uno abierto por el promotor), más la documentación |
+| Pruebas automáticas | 244 superadas (57 de harness y triage, 23 de gobierno de PRs, 46 de los agentes en Actions, 8 de la cadena de suministro, 7 de la promoción, 103 de la aplicación) |
+| Iteraciones registradas con el asistente | 104 |
 | Tiempo de una feature con el agente autónomo | 25 minutos de la petición al cierre (issue #18), con cuatro decisiones humanas |
-| Problemas de entorno resueltos | 17 |
+| Problemas de entorno resueltos | 23 |
 | Vulnerabilidades de diseño detectadas antes de explotarse | 2 (aprobación imposible sin identidad propia; herencia de credenciales) |
 
-> Este capítulo se ampliará con las iteraciones y pruebas de las tareas 10 a 12 y B a E.
+> Este capítulo se ampliará con las iteraciones y pruebas de las tareas 11 y 12 y B a E.
 
 # Documentación técnica reproducible
 
@@ -1006,7 +1078,25 @@ cosign verify ghcr.io/acbacb77/poc-almagentic-app:main \
   --certificate-identity-regexp '^https://github.com/acbacb77/poc-almagentic-core/\.github/workflows/reusable-supply-chain\.yml@'
 ```
 
-> Los pasos de las tareas 10 a 12 y B a E se añadirán al completarlas.
+### Tarea 10. Despliegue GitOps
+
+1. En core: añadir `reusable-promote.yml`, `reusable-verify-images.yml` y `scripts/promote/`. Fusionar y mover `v1`.
+2. En app, en la web de GitHub: *Settings → Environments → New environment* `gitops-staging`, con *Deployment branches* limitado a `main` y el secreto `PROMOTER_APP_PRIVATE_KEY` (la clave completa del promotor) en *Environment secrets*. No crear el secreto a nivel de repositorio.
+3. En gitops: añadir `apps/poc-almagentic-app/`, `argocd-apps/poc-almagentic-app-staging.yaml` y `.github/workflows/verify.yml`. Marcar `verify / images` como obligatorio en el ruleset de `main` y fusionar.
+4. En el equipo, con Docker Desktop y WSL: activar Kubernetes e instalar Argo CD:
+
+```
+kubectl create namespace argocd
+kubectl apply -n argocd --server-side --force-conflicts -f https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.4/manifests/install.yaml
+kubectl apply -f https://raw.githubusercontent.com/acbacb77/poc-almagentic-gitops/main/bootstrap/root-app.yaml
+kubectl -n argocd get applications
+curl -s "localhost:8000/api/v1/productos?q=taza"
+```
+
+5. En app: añadir el job `promote` a `supply-chain.yml`, pasándole solo `PROMOTER_APP_PRIVATE_KEY`, y fusionar. El promotor abre en gitops un PR `deploy(staging): …`.
+6. En gitops: revisar el PR (digest, commits que entran, check en verde), aprobarlo y fusionarlo. Argo CD despliega en unos minutos.
+
+> Los pasos de las tareas 11 y 12 y B a E se añadirán al completarlas.
 
 ## Estructura de los repositorios
 
@@ -1049,6 +1139,11 @@ poc-almagentic-gitops/
 | Al poner `aprobado` el bot comenta «El agente no ha empezado» | Leer el motivo: falta permiso de escritura, el issue tiene `triage:sospechoso` o ya existe la rama `spec/<issue>-…` |
 | `image / build` falla en «Imágenes base fijadas por digest» | Copiar en el `FROM` el digest que trae la anotación |
 | `release / publish` no puede subir a GHCR | El job que llama debe conceder `packages: write`, y el workflow reutilizable no puede declarar `permissions` a nivel de workflow |
+| Argo CD sin aplicaciones ni namespace `staging` | Aplicar `bootstrap/root-app.yaml` |
+| `promote` falla con la clave vacía | Comprobar que el secreto está en el entorno `gitops-staging` y que app lo pasa explícitamente al workflow de core |
+| «A JSON web token could not be decoded» | La clave está mal pegada; volver a pegarla o usar `gh secret set … < fichero.pem` |
+| Un *Re-run* no recoge un arreglo de core | Lanzar una ejecución nueva con *Run workflow* |
+| `read: -p: no coprocess` | La terminal es zsh: `printf 'Contraseña: '; read -s P; echo` |
 | El merge de la spec no lanza la implementación | La rama del PR debe empezar por `spec/<issue>-` y venir del mismo repositorio |
 
 # Conclusiones y trabajo futuro
@@ -1063,6 +1158,7 @@ poc-almagentic-gitops/
 6. El patrón de pensar y actuar por separado sirve también para un agente que escribe código. En la respuesta a `@claude` el modelo cambia ficheros pero no puede publicarlos; un script sin modelo decide si el cambio se sube. Al pedirle que hiciera pasar unos tests, el agente modificó un test existente. Tenía motivo y lo declaró, pero ese es el tipo de cambio que debe revisar una persona.
 7. Con el agente lanzado por las decisiones humanas que ya existían, una feature pequeña pasó de petición a cierre en 25 minutos sin escribir ningún prompt. La persona no desaparece del ciclo: aprobó la petición, resolvió las dudas, revisó dos PRs y corrigió un fallo que el revisor señaló. Lo que desaparece es el trabajo de intermediario entre el issue y el agente.
 8. La confianza en el resultado no depende de confiar en el agente. Su commit lo firma GitHub a nombre de la App, la imagen la firma el pipeline de la plataforma y la procedencia une los dos, todo comprobable por cualquiera con herramientas públicas. El agente puede escribir código, pero no puede producir ninguna de esas firmas.
+9. El gate humano funciona porque es el único camino. El clúster solo cambia cuando se fusiona un PR en gitops: Argo CD deshace cualquier cambio manual, y el check rechaza cualquier imagen que no venga del pipeline de core. La aprobación deja de ser un trámite porque el PR dice exactamente qué se despliega y qué commits entran.
 
 ## Trabajo futuro
 

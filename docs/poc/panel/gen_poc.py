@@ -138,16 +138,22 @@ TASKS = [
                ("Arreglo: publish heredaba permissions: {} y no podía subir a GHCR", "claude", True, [pr("core", 18)]),
                ("Commits del agente por la API de GitHub (Verified)", "claude", True, [pr("core", 19), pr("app", 22)]),
                ("Fusionar, mover v1 (v1.5.0, v1.5.1, v1.6.0) y relanzar la publicación", "usuario", True, [])]),
-    dict(id="10", title="Deploy GitOps con gate humano", phase="Entrega", status="next",
-         desc="El bot promotor abre un PR en gitops; tu merge despliega con Argo CD en el cluster local.",
-         prereqs=[("Kubernetes activado en Docker Desktop con 8 GB", False),
-                  ("Argo CD instalado y bootstrap/root-app.yaml aplicado", False),
-                  ("Clave del promotor como secreto de Actions en app", False)],
-         subs=[("Manifiestos de la app en gitops", "claude", False, []),
-               ("Workflow de promoción en core", "claude", False, []),
-               ("Aprobar el PR de promoción en gitops", "usuario", False, []),
-               ("Argo CD sincroniza el cluster", "auto", False, [])]),
-    dict(id="B", title="Gestión de releases", phase="Entrega", status="todo",
+    dict(id="10", title="Deploy GitOps con gate humano", phase="Entrega", status="done",
+         desc="Cada imagen firmada de main la verifica el bot promotor, que abre un PR en gitops con su digest y los commits que entran. Fusionar ese PR aprueba el despliegue y Argo CD sincroniza staging. Un check obligatorio impide desplegar imágenes no firmadas por core.",
+         prereqs=[("Kubernetes activado en Docker Desktop con 8 GB", True),
+                  ("Argo CD v3.5.4 instalado y bootstrap/root-app.yaml aplicado", True),
+                  ("Entorno gitops-staging en app (solo main) con PROMOTER_APP_PRIVATE_KEY", True),
+                  ("verify / images obligatorio en el ruleset de main de gitops", True)],
+         subs=[("Promotor y check de imágenes en core (verificación de procedencia desde main, SBOM y firma)", "claude", True, [pr("core", 21)]),
+               ("Manifiestos de la API por digest, aplicación de Argo CD y check en gitops", "claude", True, [pr("gitops", 1)]),
+               ("Service como LoadBalancer en el puerto 8000", "claude", True, [pr("gitops", 2)]),
+               ("Job promote en app", "claude", True, [pr("app", 23)]),
+               ("Arreglos: secreto del entorno pasado explícitamente y relanzar a mano", "claude", True, [pr("core", 22), pr("core", 23), pr("app", 24)]),
+               ("Desbloqueo: certifi con vulnerabilidad nueva", "claude", True, [pr("app", 25)]),
+               ("Aprobar el primer PR de promoción", "usuario", True, [pr("gitops", 3)]),
+               ("Argo CD sincroniza staging", "auto", True, []),
+               ("Prueba: imagen sin firma de core bloqueada", "claude", True, [pr("gitops", 4)])]),
+    dict(id="B", title="Gestión de releases", phase="Entrega", status="next",
          desc="Versionado semántico, changelog y notas; automatizar las etiquetas de core.",
          prereqs=[],
          subs=[("Versionado y notas de versión con release-please", "claude", False, []),
@@ -298,8 +304,11 @@ DETAILS = {
 **Cómo** (repo `poc-almagentic-core`, `reusable-agent-feature.yml`): el job `work` comprueba permiso de escritura de quien dispara, issue abierto con `aprobado` y sin `triage:sospechoso`, y que no exista ya la rama; después ejecuta Claude Code con el harness y el sandbox del repo (red limitada a GitHub y PyPI), 40 o 150 turnos y 60 minutos, sin token de GitHub. El job `publish` decide la rama, rechaza en la fase spec todo lo que no esté en `specs/`, pasa `check_pr_files.py`, sube la rama, abre el PR como `almagentic-agent[bot]` y lo anuncia en el issue.
 
 **Prueba** (petición #18, búsqueda por nombre): 2 min de etiqueta a PR de spec (app#19); un `@claude` resolvió las dos dudas; 2 min de merge a PR de implementación (app#20, 103 tests); un segundo `@claude` corrigió la fuga del texto de `q` en el log de acceso que encontró el revisor. 25 minutos de issue a cierre, con cuatro decisiones humanas.""",
-    "10": """**Cómo preparar el cluster**: pasos en el [README de gitops](https://github.com/acbacb77/poc-almagentic-gitops#puesta-en-marcha-una-sola-vez).
-""",
+    "10": """**Cómo preparar el cluster**: pasos en el [README de gitops](https://github.com/acbacb77/poc-almagentic-gitops#puesta-en-marcha-una-sola-vez). La API queda en `localhost:8000` (o `host.docker.internal:8000`).
+
+**Flujo**: merge en app → imagen firmada → el promotor verifica procedencia desde main, SBOM y firma → PR en gitops con el digest y los commits → `verify / images` → **tu aprobación y merge** → Argo CD sincroniza staging. Para volver atrás, revertir el PR de promoción. Para relanzar: Actions → supply-chain → Run workflow (un *Re-run* repite la versión antigua de core).
+
+**Problemas típicos**: sin `root-app.yaml` aplicado Argo CD no ve nada. La clave del promotor vive solo en el entorno `gitops-staging` y app tiene que pasarla explícitamente al workflow de core. «A JSON web token could not be decoded» = clave mal pegada.""",
 }
 
 
