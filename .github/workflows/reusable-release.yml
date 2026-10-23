@@ -1,0 +1,150 @@
+# Versión de una aplicación (tarea B). La lanza una persona desde app (Run workflow en main).
+#
+# Calcula la versión a partir de los Conventional Commits desde la última etiqueta y busca la
+# imagen que main ya publicó y firmó para ese commit. Si la verifica (procedencia desde main,
+# SBOM y firma de core), le añade la etiqueta vX.Y.Z sin reconstruirla (mismo digest, mismas
+# firmas), etiqueta el commit y publica la Release con las notas, el digest y si está en staging.
+name: reusable-release
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        description: "Nombre de la imagen (por defecto ghcr.io/<owner>/<repo>)"
+        type: string
+        default: ""
+      initial-version:
+        description: Primera versión si aún no hay etiquetas
+        type: string
+        default: 1.0.0
+      gitops-repo:
+        type: string
+        default: acbacb77/poc-almagentic-gitops
+      kustomization:
+        type: string
+        default: apps/poc-almagentic-app/kustomization.yaml
+      core-ref:
+        type: string
+        default: v1
+    outputs:
+      version:
+        value: ${{ jobs.release.outputs.version }}
+
+env:
+  SIGNER_WORKFLOW: acbacb77/poc-almagentic-core/.github/workflows/reusable-supply-chain.yml
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      packages: write
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+    steps:
+      - name: Solo desde main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error title=Rama no válida::Las versiones solo se publican desde main (se lanzó desde ${GITHUB_REF})."
+          exit 1
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Scripts de core
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: acbacb77/poc-almagentic-core
+          ref: ${{ inputs.core-ref }}
+          path: .core
+          persist-credentials: false
+
+      - name: Calcular versión y notas
+        id: plan
+        env:
+          REPO: ${{ github.repository }}
+          INITIAL: ${{ inputs.initial-version }}
+        run: |
+          last=$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' HEAD 2>/dev/null || true)
+          python3 .core/scripts/release/release.py --repo-dir . --range "${last:+$last..}HEAD" --last-tag "$last" \
+            --initial "$INITIAL" --repo "$REPO" --date "$(date -u +%F)" > "$RUNNER_TEMP/plan.json"
+          if [ "$(jq -r .bump "$RUNNER_TEMP/plan.json")" = none ]; then
+            echo "::error title=Nada que publicar::No hay cambios publicables (feat, fix…) desde ${last:-el inicio}."
+            exit 1
+          fi
+          echo "version=$(jq -r .version "$RUNNER_TEMP/plan.json")" >> "$GITHUB_OUTPUT"
+          echo "last=$last" >> "$GITHUB_OUTPUT"
+          jq -r .notes "$RUNNER_TEMP/plan.json" > "$RUNNER_TEMP/notas.md"
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Imagen publicada y verificada para este commit
+        id: image
+        env:
+          IMAGE_IN: ${{ inputs.image }}
+          REPO: ${{ github.repository }}
+          SOURCE_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          image="${IMAGE_IN:-ghcr.io/${REPO}}"; image="${image,,}"
+          if ! digest=$(docker buildx imagetools inspect "${image}:sha-${GITHUB_SHA::12}" --format '{{json .Manifest}}' 2>/dev/null | jq -er .digest); then
+            echo "::error title=Imagen no publicada::No existe ${image}:sha-${GITHUB_SHA::12}. Espera a que supply-chain termine en main para este commit."
+            exit 1
+          fi
+          commit=$(bash .core/scripts/promote/verify_image.sh "${image}@${digest}")
+          if [ "$commit" != "$GITHUB_SHA" ]; then
+            echo "::error title=Procedencia distinta::La imagen dice venir de ${commit}, no de ${GITHUB_SHA}."
+            exit 1
+          fi
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Etiquetar la imagen sin reconstruirla
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+          VERSION: ${{ steps.plan.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker buildx imagetools create -t "${IMAGE}:v${VERSION}" "${IMAGE}@${DIGEST}"
+          test "$(docker buildx imagetools inspect "${IMAGE}:v${VERSION}" --format '{{json .Manifest}}' | jq -r .digest)" = "$DIGEST"
+
+      - name: Etiquetar el commit y publicar la Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          GITOPS: ${{ inputs.gitops-repo }}
+          KUST: ${{ inputs.kustomization }}
+          IMAGE: ${{ steps.image.outputs.image }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+          VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          tag="v${VERSION}"
+          staging=$(gh api "repos/${GITOPS}/contents/${KUST}" --jq .content | base64 -d | grep -c "digest: ${DIGEST}" || true)
+          {
+            cat "$RUNNER_TEMP/notas.md"
+            echo
+            echo "### Imagen"
+            echo
+            echo "\`${IMAGE}:${tag}\` es la misma imagen que publicó y firmó main para este commit; no se reconstruye."
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Digest | \`${DIGEST}\` |"
+            echo "| Commit | ${GITHUB_SHA} |"
+            echo "| En staging | $([ "$staging" -gt 0 ] && echo "sí" || echo "todavía no: se despliega con el PR de promoción en gitops") |"
+            echo
+            echo "Verificar procedencia y firma:"
+            echo
+            echo '```'
+            echo "gh attestation verify oci://${IMAGE}@${DIGEST} --owner ${GITHUB_REPOSITORY_OWNER} --signer-workflow ${SIGNER_WORKFLOW}"
+            echo '```'
+          } > "$RUNNER_TEMP/release.md"
+          gh api "repos/${REPO}/git/refs" -f "ref=refs/tags/${tag}" -f "sha=${GITHUB_SHA}" > /dev/null
+          gh release create "$tag" --repo "$REPO" --title "$tag" --notes-file "$RUNNER_TEMP/release.md" --verify-tag
+          echo "::notice title=Versión publicada::${tag} → ${IMAGE}@${DIGEST}"
+          cat "$RUNNER_TEMP/release.md" >> "$GITHUB_STEP_SUMMARY"

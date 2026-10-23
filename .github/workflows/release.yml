@@ -1,0 +1,57 @@
+# Versiones de core (tarea B). Cada merge a main con cambios publicables (feat, fix, ci…)
+# crea la etiqueta vX.Y.Z con sus notas y mueve la etiqueta de la versión mayor (v1), que es
+# la que usan app y gitops. Ya no hay que mover etiquetas a mano.
+name: release
+
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Calcular versión y notas
+        id: plan
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          last=$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' HEAD 2>/dev/null || true)
+          python3 scripts/release/release.py --repo-dir . --range "${last:+$last..}HEAD" --last-tag "$last" \
+            --repo "$REPO" --date "$(date -u +%F)" > plan.json
+          echo "bump=$(jq -r .bump plan.json)" >> "$GITHUB_OUTPUT"
+          echo "version=$(jq -r .version plan.json)" >> "$GITHUB_OUTPUT"
+          jq -r .notes plan.json > notas.md
+          echo "Última: ${last:-ninguna} → $(jq -r '.bump + " " + .version' plan.json)"
+
+      - name: Etiquetar, publicar la versión y mover la mayor
+        if: steps.plan.outputs.bump != 'none'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          tag="v${VERSION}"; major="v${VERSION%%.*}"
+          gh api "repos/${REPO}/git/refs" -f "ref=refs/tags/${tag}" -f "sha=${GITHUB_SHA}" > /dev/null
+          gh release create "$tag" --repo "$REPO" --title "$tag" --notes-file notas.md --verify-tag
+          if gh api "repos/${REPO}/git/ref/tags/${major}" > /dev/null 2>&1; then
+            gh api -X PATCH "repos/${REPO}/git/refs/tags/${major}" -f "sha=${GITHUB_SHA}" -F force=true > /dev/null
+          else
+            gh api "repos/${REPO}/git/refs" -f "ref=refs/tags/${major}" -f "sha=${GITHUB_SHA}" > /dev/null
+          fi
+          echo "::notice title=Versión publicada::${tag} (${major} → ${GITHUB_SHA::7})"
+          cat notas.md >> "$GITHUB_STEP_SUMMARY"
