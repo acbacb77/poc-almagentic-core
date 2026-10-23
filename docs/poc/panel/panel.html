@@ -1201,8 +1201,8 @@ const TASKS = [
   "id": "B",
   "title": "Gestión de releases",
   "phase": "Entrega",
-  "status": "next",
-  "desc": "Versionado semántico, changelog y notas; automatizar las etiquetas de core.",
+  "status": "done",
+  "desc": "core se versiona solo en cada merge publicable (vX.Y.Z y mueve v1). La app publica versiones a demanda: semver por Conventional Commits, notas con los cambios del agente y la imagen firmada de main etiquetada sin reconstruir.",
   "alm": [
    "10",
    "11"
@@ -1210,22 +1210,69 @@ const TASKS = [
   "prereqs": [],
   "subs": [
    [
-    "Versionado y notas de versión con release-please",
+    "Cálculo de versión y notas (release.py, 19 tests)",
     "claude",
-    false,
-    []
+    true,
+    [
+     {
+      "label": "core#25",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/25"
+     }
+    ]
    ],
    [
-    "Automatizar las etiquetas de core (vX.Y.Z y mover v1)",
+    "Versiones de core automáticas: vX.Y.Z y mover v1",
     "claude",
-    false,
-    []
+    true,
+    [
+     {
+      "label": "core#25",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/25"
+     }
+    ]
    ],
    [
-    "Hasta entonces, crear o mover etiquetas de core a mano",
+    "Versiones de la app con Run workflow, sin reconstruir la imagen",
+    "claude",
+    true,
+    [
+     {
+      "label": "core#25",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/25"
+     },
+     {
+      "label": "app#26",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/26"
+     }
+    ]
+   ],
+   [
+    "create-github-app-token: app-id → client-id",
+    "claude",
+    true,
+    [
+     {
+      "label": "core#25",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/25"
+     }
+    ]
+   ],
+   [
+    "Primera versión de la app: v1.0.0",
     "usuario",
-    false,
+    true,
     []
+   ],
+   [
+    "Desplegar v1.0.0 en staging",
+    "usuario",
+    true,
+    [
+     {
+      "label": "gitops#6",
+      "href": "https://github.com/acbacb77/poc-almagentic-gitops/pull/6"
+     }
+    ]
    ]
   ]
  },
@@ -1233,7 +1280,7 @@ const TASKS = [
   "id": "11",
   "title": "Cerrar el loop de operación",
   "phase": "Operación",
-  "status": "todo",
+  "status": "next",
   "desc": "Alerta → issue → agente → PR, y panel de telemetría de los agentes.",
   "alm": null,
   "prereqs": [

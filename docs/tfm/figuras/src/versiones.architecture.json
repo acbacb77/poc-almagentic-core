@@ -1,0 +1,208 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Versiones de core y de la aplicación",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "external": {
+          "label": "Persona o entrada"
+        },
+        "backend": {
+          "label": "Agente o proceso"
+        },
+        "security": {
+          "label": "Control o aprobación"
+        },
+        "frontend": {
+          "label": "Artefacto en GitHub"
+        },
+        "database": {
+          "label": "Estado en git"
+        },
+        "messagebus": {
+          "label": "Bot de promoción"
+        },
+        "cloud": {
+          "label": "Clúster"
+        }
+      }
+    }
+  },
+  "components": [
+    {
+      "id": "mcore",
+      "type": "external",
+      "label": "Merge en core",
+      "sublabel": "feat, fix, ci…",
+      "pos": [
+        40,
+        50
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "relcore",
+      "type": "backend",
+      "label": "release.yml",
+      "sublabel": "calcula semver",
+      "pos": [
+        260,
+        50
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "tags",
+      "type": "frontend",
+      "label": "v1.8.0 y v1",
+      "sublabel": "Release y etiqueta",
+      "pos": [
+        480,
+        50
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "run",
+      "type": "external",
+      "label": "Run workflow",
+      "sublabel": "decide una persona",
+      "pos": [
+        40,
+        190
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "plan",
+      "type": "backend",
+      "label": "release.py",
+      "sublabel": "versión y notas",
+      "pos": [
+        260,
+        190
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "verif",
+      "type": "security",
+      "label": "Imagen de main",
+      "sublabel": "verificada",
+      "pos": [
+        480,
+        190
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "etiq",
+      "type": "frontend",
+      "label": "Imagen v1.0.0",
+      "sublabel": "mismo digest",
+      "pos": [
+        480,
+        330
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "rel",
+      "type": "frontend",
+      "label": "Release",
+      "sublabel": "notas con 🤖",
+      "pos": [
+        260,
+        330
+      ],
+      "size": [
+        140,
+        56
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Repo core",
+      "wraps": [
+        "mcore",
+        "relcore",
+        "tags"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Repo app",
+      "wraps": [
+        "run",
+        "plan",
+        "verif",
+        "etiq",
+        "rel"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "e1",
+      "from": "mcore",
+      "to": "relcore"
+    },
+    {
+      "id": "e2",
+      "from": "relcore",
+      "to": "tags",
+      "label": "automático"
+    },
+    {
+      "id": "e3",
+      "from": "run",
+      "to": "plan"
+    },
+    {
+      "id": "e4",
+      "from": "plan",
+      "to": "verif"
+    },
+    {
+      "id": "e5",
+      "from": "verif",
+      "to": "etiq",
+      "label": "sin reconstruir",
+      "labelAt": [
+        550,
+        288
+      ]
+    },
+    {
+      "id": "e6",
+      "from": "etiq",
+      "to": "rel"
+    }
+  ]
+}

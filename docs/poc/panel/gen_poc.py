@@ -153,13 +153,16 @@ TASKS = [
                ("Aprobar el primer PR de promoción", "usuario", True, [pr("gitops", 3)]),
                ("Argo CD sincroniza staging", "auto", True, []),
                ("Prueba: imagen sin firma de core bloqueada", "claude", True, [pr("gitops", 4)])]),
-    dict(id="B", title="Gestión de releases", phase="Entrega", status="next",
-         desc="Versionado semántico, changelog y notas; automatizar las etiquetas de core.",
+    dict(id="B", title="Gestión de releases", phase="Entrega", status="done",
+         desc="core se versiona solo en cada merge publicable (vX.Y.Z y mueve v1). La app publica versiones a demanda: semver por Conventional Commits, notas con los cambios del agente y la imagen firmada de main etiquetada sin reconstruir.",
          prereqs=[],
-         subs=[("Versionado y notas de versión con release-please", "claude", False, []),
-               ("Automatizar las etiquetas de core (vX.Y.Z y mover v1)", "claude", False, []),
-               ("Hasta entonces, crear o mover etiquetas de core a mano", "usuario", False, [])]),
-    dict(id="11", title="Cerrar el loop de operación", phase="Operación", status="todo",
+         subs=[("Cálculo de versión y notas (release.py, 19 tests)", "claude", True, [pr("core", 25)]),
+               ("Versiones de core automáticas: vX.Y.Z y mover v1", "claude", True, [pr("core", 25)]),
+               ("Versiones de la app con Run workflow, sin reconstruir la imagen", "claude", True, [pr("core", 25), pr("app", 26)]),
+               ("create-github-app-token: app-id → client-id", "claude", True, [pr("core", 25)]),
+               ("Primera versión de la app: v1.0.0", "usuario", True, []),
+               ("Desplegar v1.0.0 en staging", "usuario", True, [pr("gitops", 6)])]),
+    dict(id="11", title="Cerrar el loop de operación", phase="Operación", status="next",
          desc="Alerta → issue → agente → PR, y panel de telemetría de los agentes.",
          prereqs=[("Token del puente alerta → issue como secreto del cluster", False)],
          subs=[("Prometheus, Grafana y Alertmanager en el cluster", "claude", False, []),
@@ -304,6 +307,11 @@ DETAILS = {
 **Cómo** (repo `poc-almagentic-core`, `reusable-agent-feature.yml`): el job `work` comprueba permiso de escritura de quien dispara, issue abierto con `aprobado` y sin `triage:sospechoso`, y que no exista ya la rama; después ejecuta Claude Code con el harness y el sandbox del repo (red limitada a GitHub y PyPI), 40 o 150 turnos y 60 minutos, sin token de GitHub. El job `publish` decide la rama, rechaza en la fase spec todo lo que no esté en `specs/`, pasa `check_pr_files.py`, sube la rama, abre el PR como `almagentic-agent[bot]` y lo anuncia en el issue.
 
 **Prueba** (petición #18, búsqueda por nombre): 2 min de etiqueta a PR de spec (app#19); un `@claude` resolvió las dos dudas; 2 min de merge a PR de implementación (app#20, 103 tests); un segundo `@claude` corrigió la fuga del texto de `q` en el log de acceso que encontró el revisor. 25 minutos de issue a cierre, con cuatro decisiones humanas.""",
+    "B": """**Versiones de core**: automáticas en cada merge a main con `feat`, `fix`, `ci`… (workflow `release` de core). Crea `vX.Y.Z` con su Release y mueve `v1`; un cambio incompatible crea `v2`. **Ya no se mueven etiquetas a mano.**
+
+**Versiones de la app** (repo `poc-almagentic-app`): *Actions → release → Run workflow* sobre `main`, después de que `supply-chain` termine para ese commit. Si falla con «Nada que publicar», desde la última versión solo hubo documentación o pruebas; con «Imagen no publicada», espera a `supply-chain`.
+
+**Primera versión**: `v1.0.0` = `ghcr.io/acbacb77/poc-almagentic-app@sha256:8ace64ae…` (commit `3898e7c`), desplegada con gitops#6.""",
     "10": """**Cómo preparar el cluster**: pasos en el [README de gitops](https://github.com/acbacb77/poc-almagentic-gitops#puesta-en-marcha-una-sola-vez). La API queda en `localhost:8000` (o `host.docker.internal:8000`).
 
 **Flujo**: merge en app → imagen firmada → el promotor verifica procedencia desde main, SBOM y firma → PR en gitops con el digest y los commits → `verify / images` → **tu aprobación y merge** → Argo CD sincroniza staging. Para volver atrás, revertir el PR de promoción. Para relanzar: Actions → supply-chain → Run workflow (un *Re-run* repite la versión antigua de core).
