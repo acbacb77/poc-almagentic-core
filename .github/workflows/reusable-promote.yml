@@ -6,8 +6,8 @@
 # Argo CD sincroniza staging con main de gitops.
 #
 # La clave del promotor vive en el entorno `environment` del repo que llama, limitado a main.
-# No se declara como secreto de entrada: si se declarara y el que llama no la pasa, el job
-# vería ese valor vacío en lugar del secreto del entorno.
+# Comprobado en la POC: un workflow reutilizable de otro repo solo ve los secretos que el que
+# llama le pasa explícitamente, aunque su job declare el entorno. Por eso app pasa solo este.
 name: reusable-promote
 
 on:
@@ -42,6 +42,10 @@ on:
       core-ref:
         type: string
         default: v1
+    secrets:
+      PROMOTER_APP_PRIVATE_KEY:
+        description: Clave de la GitHub App del promotor (instalada solo en gitops)
+        required: true
 
 env:
   SIGNER_WORKFLOW: acbacb77/poc-almagentic-core/.github/workflows/reusable-supply-chain.yml
@@ -84,7 +88,7 @@ jobs:
           ENVIRONMENT: ${{ inputs.environment }}
         run: |
           if [ -z "$KEY" ]; then
-            echo "::error title=Falta la clave del promotor::Crea el secreto PROMOTER_APP_PRIVATE_KEY dentro del entorno ${ENVIRONMENT} (Settings → Environments → ${ENVIRONMENT} → Environment secrets) del repo ${GITHUB_REPOSITORY}."
+            echo "::error title=Falta la clave del promotor::Crea el secreto PROMOTER_APP_PRIVATE_KEY dentro del entorno ${ENVIRONMENT} (Settings → Environments → ${ENVIRONMENT} → Environment secrets) del repo ${GITHUB_REPOSITORY} y pásalo desde el job que llama (secrets: PROMOTER_APP_PRIVATE_KEY)."
             exit 1
           fi
 
