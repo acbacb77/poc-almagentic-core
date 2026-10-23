@@ -1,0 +1,153 @@
+# Promoción a staging (tarea 10). Se llama desde app cuando main publica una imagen.
+#
+# Verifica la imagen (procedencia desde main, SBOM y firma de core) y, con un token de una
+# hora de la GitHub App del promotor, abre en gitops un PR que cambia su digest. El PR lleva
+# los commits de app que entran en el despliegue. Fusionarlo es la aprobación del despliegue:
+# Argo CD sincroniza staging con main de gitops.
+#
+# La clave del promotor vive en el entorno `environment` del repo que llama, limitado a main.
+name: reusable-promote
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        description: Nombre de la imagen sin etiqueta ni digest
+        type: string
+        required: true
+      digest:
+        description: Digest publicado por reusable-supply-chain.yml
+        type: string
+        required: true
+      gitops-repo:
+        type: string
+        default: acbacb77/poc-almagentic-gitops
+      kustomization:
+        description: Kustomization de gitops que fija la imagen
+        type: string
+        default: apps/poc-almagentic-app/kustomization.yaml
+      target:
+        description: Entorno de destino (nombre de la rama y del PR)
+        type: string
+        default: staging
+      environment:
+        description: Entorno de GitHub con la clave del promotor
+        type: string
+        default: gitops-staging
+      promoter-app-id:
+        type: string
+        required: true
+      core-ref:
+        type: string
+        default: v1
+    secrets:
+      PROMOTER_APP_PRIVATE_KEY:
+        required: false
+
+env:
+  SIGNER_WORKFLOW: acbacb77/poc-almagentic-core/.github/workflows/reusable-supply-chain.yml
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+    steps:
+      - name: Scripts de core
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: acbacb77/poc-almagentic-core
+          ref: ${{ inputs.core-ref }}
+          path: .core
+          persist-credentials: false
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Verificar la imagen antes de proponerla
+        id: verify
+        env:
+          REF: ${{ inputs.image }}@${{ inputs.digest }}
+          SOURCE_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: echo "commit=$(bash .core/scripts/promote/verify_image.sh "$REF")" >> "$GITHUB_OUTPUT"
+
+      - name: Repositorio de gitops
+        id: gitops
+        env:
+          GITOPS: ${{ inputs.gitops-repo }}
+        run: echo "name=${GITOPS#*/}" >> "$GITHUB_OUTPUT"
+
+      - name: Token de una hora del promotor (solo gitops)
+        id: token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ inputs.promoter-app-id }}
+          private-key: ${{ secrets.PROMOTER_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ steps.gitops.outputs.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Estado deseado (solo lectura; el commit se publica por la API)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ inputs.gitops-repo }}
+          path: gitops
+          persist-credentials: false
+
+      - name: Cambiar el digest y abrir el PR de promoción
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          APP_TOKEN: ${{ github.token }}
+          GITOPS: ${{ inputs.gitops-repo }}
+          KUST: ${{ inputs.kustomization }}
+          IMAGE: ${{ inputs.image }}
+          DIGEST: ${{ inputs.digest }}
+          TARGET: ${{ inputs.target }}
+          NEW_COMMIT: ${{ steps.verify.outputs.commit }}
+          SOURCE_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          W="$GITHUB_WORKSPACE"
+          cd gitops
+          base=$(git rev-parse HEAD)
+          set +e; old=$(python3 "$W/.core/scripts/promote/promote.py" set "$KUST" "$IMAGE" "$DIGEST"); rc=$?; set -e
+          if [ "$rc" = 3 ]; then echo "${TARGET} ya despliega ${DIGEST}"; exit 0; fi
+          [ "$rc" = 0 ] || exit "$rc"
+          branch="promote/${TARGET}-${DIGEST:7:12}"
+          if gh api "repos/${GITOPS}/git/ref/heads/${branch}" > /dev/null 2>&1; then
+            echo "Ya existe ${branch}: la promoción de este digest ya está propuesta"; exit 0
+          fi
+
+          # Qué entra en el despliegue: commits de app entre la imagen actual y la nueva.
+          old_commit=$(GH_TOKEN="$APP_TOKEN" bash "$W/.core/scripts/promote/verify_image.sh" "${IMAGE}@${old}" 2>/dev/null || true)
+          {
+            echo "Promoción a **${TARGET}** de \`${IMAGE}\`."
+            echo
+            echo "| | Digest | Commit de app |"
+            echo "|---|---|---|"
+            echo "| Ahora | \`${old}\` | ${old_commit:-desconocido} |"
+            echo "| Propuesto | \`${DIGEST}\` | ${NEW_COMMIT} |"
+            echo
+            echo "**Verificado antes de abrir el PR:** procedencia SLSA construida desde main de ${SOURCE_REPO}, SBOM y firma de cosign, todo firmado por \`${SIGNER_WORKFLOW}\`. El check de gitops lo vuelve a comprobar."
+            echo
+            if [ -n "$old_commit" ] && [ -n "$NEW_COMMIT" ]; then
+              echo "**Cambios que entran**"
+              echo
+              GH_TOKEN="$APP_TOKEN" gh api "repos/${SOURCE_REPO}/compare/${old_commit}...${NEW_COMMIT}" \
+                --jq '.commits[] | "- " + .sha[0:7] + " " + (.commit.message | split("\n")[0] | gsub("@"; "@​")) + " (" + (.author.login // .commit.author.name) + ")"' || echo "- (no se pudo calcular la lista)"
+              echo
+            fi
+            echo "**Fusionar este PR aprueba el despliegue**: Argo CD sincronizará ${TARGET} con main de gitops."
+            echo
+            echo "---"
+            echo "<sub>PR abierto por el promotor (\`poc-almagentic-core/reusable-promote.yml\`, [ejecución](${RUN_URL})).</sub>"
+          } > "$W/cuerpo.md"
+
+          git -c user.name=promotor -c user.email=promotor@invalid commit -qam "deploy(${TARGET}): ${IMAGE##*/}@${DIGEST:0:19}" -m "Commit de app: ${NEW_COMMIT}"
+          python3 "$W/.core/scripts/agent/api_commit.py" . "$GITOPS" "$branch" "$base" --create-from "$base" > /dev/null
+          url=$(gh pr create --repo "$GITOPS" --base main --head "$branch" \
+            --title "deploy(${TARGET}): ${IMAGE##*/} ${DIGEST:0:19} (${NEW_COMMIT:0:7})" --body-file "$W/cuerpo.md")
+          echo "::notice title=Promoción propuesta::${url}"

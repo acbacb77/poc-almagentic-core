@@ -28,3 +28,5 @@ jobs:
           (cd scripts/security && uvx --with pytest==9.1.1 pytest -q)
           (cd scripts/agent && uvx --with pytest==9.1.1 pytest -q)
           (cd scripts/supply-chain && uvx --with pytest==9.1.1 pytest -q)
+          (cd scripts/promote && uvx --with pytest==9.1.1 pytest -q)
+          bash -n scripts/promote/verify_image.sh
