@@ -667,9 +667,53 @@ En el mismo cambio se sustituyó `app-id` por `client-id` en la acción que crea
 | Primera versión de la app | `v1.0.0` sobre el commit `3898e7c`. Las notas agrupan novedades, correcciones y otros cambios con enlace a cada PR, y marcan con 🤖 el catálogo (app#10), `Cache-Control` (app#16) y la búsqueda (app#20). La etiqueta `v1.0.0` de la imagen apunta al mismo digest que publicó main |
 | Despliegue de la versión | La Release indicaba «todavía no» en staging; el promotor ya había propuesto ese digest (gitops#6) y el responsable lo aprobó |
 
+## Tarea 11: cerrar el ciclo de operación
+
+Hasta aquí el ciclo empezaba siempre con una persona que escribe una petición. La tarea 11 añade la otra entrada habitual de trabajo en un equipo de producto: algo que se observa en producción. Una alerta entra por la misma puerta que una petición escrita por una persona. El puente convierte la alerta en un issue con el formato de la plantilla, el triage lo clasifica y una persona decide qué se hace. A partir de esa decisión el camino es el de siempre: spec, implementación, revisión, imagen firmada y promoción aprobada.
+
+![Figura 11. Operación: la alerta abre un issue y vuelve a entrar en el ciclo normal; la telemetría de los agentes se lee de GitHub.](figuras/operacion.png)
+
+El responsable tomó tres decisiones antes de empezar. El puente escribe en GitHub con un token personal de grano fino, limitado al repo app, con permiso de escritura en issues y de lectura en Actions, y con caducidad de 90 días; se descartó una tercera GitHub App por el trabajo de crearla para dos permisos. La alerta de demostración es la de búsquedas rechazadas, porque se puede provocar desde el equipo con `curl` y su arreglo pasa por cambiar una spec. Y la telemetría de los agentes se lee de la API de GitHub, porque los agentes corren en Actions y el clúster es local: nada en GitHub puede enviarle datos.
+
+| Pieza | Repositorio | Qué hace |
+|---|---|---|
+| Métricas en el puerto 9000 | app (app#27) | La API sirve `/metrics` en un puerto propio que el `Service` no publica. En la tarea 10 quedó anotado que el `LoadBalancer` exponía las métricas junto a la API |
+| Prometheus y Alertmanager | gitops | Chart de prometheus-community fijado en la versión 29.37.1. Descubre los pods por anotaciones y evalúa dos reglas: `BusquedasRechazadas` (más del 20 % de búsquedas con 422 y al menos 10 en cinco minutos, durante un minuto) y `ApiSinRespuesta` (la API no responde a Prometheus durante dos minutos) |
+| Puente alerta → issue | gitops (`puente.py`) | Recibe el webhook de Alertmanager y abre en app un issue con las secciones de la plantilla de peticiones y las etiquetas `alerta` y `triage:pendiente`. Si el issue ya existe, comenta en él. Cuando la alerta se resuelve, lo comenta, pero no cierra el issue: eso lo hace una persona o el PR del arreglo. Solo usa la biblioteca estándar y corre sobre la imagen oficial de Python fijada por digest, sin imagen propia que firmar. 8 tests |
+| Exportador de telemetría | gitops (`exportador.py`) | Cada cinco minutos lee las últimas ejecuciones de los cuatro agentes (triage, revisor, respuesta a `@claude` y autónomo) y el resumen que Claude Code deja en sus artefactos. Publica ejecuciones por resultado, duración media, turnos, coste equivalente y errores del modelo. 4 tests |
+| Grafana | gitops | Chart de grafana-community 14.0.0 con dos paneles cargados desde git: «API del catálogo» (disponibilidad, alertas activas, 422, latencia p95, consultas por estado y búsquedas con y sin resultados) y «Actividad de los agentes» |
+
+Las reglas de alerta tienen sus propias pruebas con `promtool test rules`: cuatro casos que comprueban que cada alerta salta cuando debe y no salta cuando no debe. El texto del issue se escribe en la regla, de modo que quien lo lee sabe qué requisito está en juego (FR-009 de la spec 002) y por qué no aparece el texto buscado (FR-011).
+
+Los dos secretos del clúster (el token del puente y la contraseña de Grafana) se crean a mano con `kubectl create secret` y nunca entran en git.
+
+### Puesta en marcha
+
+Al desplegar saltó una alerta que no estaba prevista. gitops#7 añadió a la API la anotación del puerto 9000 antes de que la imagen que lo sirve (app#27) llegara a staging, y durante esos minutos Prometheus no encontró la API. El puente abrió app#28 («La API de staging no responde»), el triage lo clasificó y la alerta se resolvió sola al desplegarse la imagen. El responsable cerró el issue con la causa y sin `aprobado`, que es justo lo que el diseño permite: no toda alerta debe convertirse en trabajo para el agente. Para la próxima vez queda la lección de desplegar primero la imagen y después la configuración que depende de ella.
+
+Grafana se reiniciaba cada veinte minutos. El código de salida 137 sugería falta de memoria, pero el pod no estaba marcado como `OOMKilled`: lo mataba el liveness porque `/api/health` devolvía 503. Grafana 13 guarda todo en SQLite y, con la base en un `emptyDir` y poca CPU reservada, el chequeo de la base fallaba mientras Grafana escribía. Se activó el modo WAL de SQLite, se dio más margen al liveness y más CPU (gitops#9). El responsable lo había parado a mano mientras tanto. Argo CD lo habría vuelto a levantar por `selfHeal`, así que el arreglo tenía que ir por PR, igual que cualquier otro cambio del clúster.
+
+### Resultado: una alerta convertida en un cambio desplegado
+
+El responsable lanzó durante dos minutos búsquedas con un texto de 120 caracteres, por encima del máximo de 100.
+
+1. La regla saltó y el puente abrió app#29, «Muchas búsquedas de productos se rechazan por longitud», con el porcentaje de rechazos y la hora.
+2. El triage lo clasificó como `bug`, prioridad media, tamaño S. Propuso criterios de aceptación y cuatro preguntas abiertas (longitud real de las consultas, cambios recientes, necesidad de negocio y alcance), y señaló el riesgo de cambiar el contrato de `/api/v1`.
+3. Cuando el tráfico paró, la alerta se resolvió y el puente lo comentó en el issue sin cerrarlo.
+4. El responsable respondió a las preguntas y decidió en un comentario: subir el máximo a 200 caracteres, mantener el 422 genérico por encima y no registrar nunca el texto. Añadió `aprobado`.
+5. El agente autónomo escribió la spec 003 y, además, actualizó FR-009 de la spec 002, como pedía la decisión. El guardarraíl que decide el nombre de la rama rechazó el cambio porque esperaba una única carpeta de spec. El agente había hecho lo correcto y el script era demasiado estricto: ahora busca la carpeta nueva solo entre los ficheros creados (core#27). Al volver a poner `aprobado`, el agente abrió la spec (app#30) y, tras el merge, la implementación (app#31).
+6. En app#31 falló el CI por una línea de 101 caracteres. Un `@claude` lo corrigió con un commit verificado.
+7. Al fusionar app#31 se cerró el issue, se publicó la imagen firmada y el promotor abrió gitops#11. Tras aprobarlo, la búsqueda con 120 caracteres devuelve 200 y la de 201 sigue devolviendo 422.
+
+Desde el `aprobado` hasta el cierre del issue pasaron 25 minutos, incluido el arreglo del guardarraíl. El responsable no escribió ningún prompt; tomó cinco decisiones: la del comentario, dos merges en app, el `@claude` y la aprobación del despliegue.
+
+El paso 6 escondía un problema mayor. El resumen del agente decía que no había podido ejecutar ningún comando: el sandbox fallaba con `apply-seccomp: write /proc/self/setgroups`. Desde el 19 de octubre `ubuntu-latest` es Ubuntu 26.04, y allí el sandbox de Claude Code no arranca. El agente escribió la implementación y los tests sin poder ejecutarlos, y el CI fue lo único que detectó el error. Lo declaró en su resumen y no buscó un rodeo, que es el comportamiento esperado del harness. Los jobs del agente se fijaron a `ubuntu-24.04` y ahora un paso previo comprueba que el sandbox funciona y para el job, antes de llamar al modelo, si no es así (core#28).
+
+En la implementación el agente cambió tests existentes, que su prompt prohíbe. Los cambios eran los que exigía el nuevo contrato: los tests del límite de 100 pasaron a 200 y se añadieron casos frontera (101, 200 y 201 caracteres, espacios en los extremos y caracteres no ASCII). Aun así es un cambio que una persona tiene que mirar en la revisión, y así se hizo.
+
 ## Tareas pendientes
 
-> Las secciones de las tareas 11 y 12 y de las extensiones C a E se añadirán a medida que se implementen: operación, mantenimiento, retirada y trazabilidad.
+> Las secciones de la tarea 12 y de las extensiones C a E se añadirán a medida que se implementen: mantenimiento, retirada y trazabilidad.
 
 # Iteraciones con modelos, pruebas y resultados
 
@@ -883,6 +927,24 @@ El registro que sigue resume toda la conversación del proyecto. Se han omitido 
 | 106 | Elige workflow manual para la app y `@v1` automático para core | Escribe `release.py` y lo prueba con el historial real de los dos repos; corrige tres detalles que salen al hacerlo (prefijo «[Petición]», autoría del agente dentro de un *merge commit* y mensajes sin Conventional Commits). Abre core#25 y app#26 | Extensión B preparada |
 | 107 | «Continúa» (tras fusionar y lanzar `release`) | Comprueba `v1.8.0` y `v1` movida solos, la promoción con `client-id` y la Release `v1.0.0` con su imagen | Extensión B cerrada |
 
+### Fase 17 · Operación (24 de octubre)
+
+| # | Petición del autor | Respuesta y acción del modelo | Resultado |
+|---|---|---|---|
+| 108 | «Siguiente» | Diseña la tarea 11 y plantea tres decisiones con su coste: identidad del puente, alerta de demostración y origen de la telemetría de los agentes | Decisiones del autor |
+| 109 | Elige token personal limitado, búsquedas rechazadas y lectura desde la API de GitHub | Escribe el puerto de métricas (app#27), el puente y el exportador con la biblioteca estándar (12 tests), las reglas con sus pruebas de promtool y los paneles (gitops#7). Un error de mypy en app#27 se le pasa porque encadenó las comprobaciones mal y lo corrige antes del merge | Tarea 11 preparada |
+| 110 | «¿Dónde se crea el token? Recuerda decir en qué repo hay que actuar» | Aclara que el token se crea en los ajustes de la cuenta, no de un repo, y da los permisos exactos | Secretos creados |
+| 111 | «Todo instalado y mergeado» | Sigue el despliegue, encuentra la alerta no prevista (app#28), explica que la causó el orden de despliegue y pide cerrarla sin `aprobado`. Da el bucle de `curl` para provocar la alerta de demostración | |
+| 112 | «El pod de Grafana se muere al cabo de un rato» | Pide la descripción del pod y los logs anteriores | |
+| 113 | Salida de `kubectl describe` y logs | Descarta la falta de memoria (no hay `OOMKilled`) y apunta al liveness con `/api/health` en 503 | Diagnóstico |
+| 114 | «He parado Grafana; la alerta ha generado el issue» | Revisa app#29 y su triage, propone el texto de la decisión y abre gitops#9 para Grafana | Issue listo para decidir |
+| 115 | «La spec ha fallado» | Comprueba que el agente hizo lo pedido y que el guardarraíl era demasiado estricto; abre core#27 con un test nuevo | Spec abierta (app#30) |
+| 116 | «Hay un check que no ha pasado» | Reproduce el CI en local: una línea de 101 caracteres. Redacta el `@claude` y señala que el agente cambió tests existentes con motivo | |
+| 117 | «Sigue fallando» | Los checks aún corrían; espera a que terminen en verde. Lee en el resumen del agente que el sandbox no arrancó | |
+| 118 | «Listo» | Detecta una promoción antigua abierta (gitops#10) y abre core#28 con el runner fijado y la comprobación del sandbox | |
+| 119 | «Sí, usa Ubuntu 26.04» | Confirma la hipótesis con el dato del autor, porque la sesión no puede leer los logs de Actions | Causa confirmada |
+| 120 | «Merged» | Actualiza el texto de la alerta al nuevo máximo (gitops#12) y cierra la documentación de la tarea | Tarea 11 cerrada |
+
 ## Pruebas realizadas y resultados
 
 ### Pruebas automáticas
@@ -890,11 +952,11 @@ El registro que sigue resume toda la conversación del proyecto. Se han omitido 
 | Componente | Pruebas | Resultado |
 |---|---|---|
 | Hook `guard.py` | 45 casos: 21 comandos que deben bloquearse, 10 que deben permitirse, ficheros protegidos, secretos y auditoría | 45/45 superadas |
-| Aplicación: catálogo (`app`) | 103 casos: listado, consulta por id, 404, precio con 2 decimales, orden estable, catálogo mal formado, despliegue de un cambio de precio, observabilidad, `/health`, `Cache-Control: no-store` y búsqueda por nombre (45, escritos por el agente autónomo) | 103/103 superadas |
+| Aplicación: catálogo (`app`) | 117 casos (103 hasta la tarea B; 14 más con el límite de 200, escritos por el agente): listado, consulta por id, 404, precio con 2 decimales, orden estable, catálogo mal formado, despliegue de un cambio de precio, observabilidad, `/health`, `Cache-Control: no-store` y búsqueda por nombre (45, escritos por el agente autónomo) | 117/117 superadas |
 | CI obligatorio (app#12) | PR con un `import` sin usar | CI en rojo y merge bloqueado |
 | Gobierno de PRs (`check_pr_files.py`) | 23 casos: ficheros generados, ficheros protegidos según el autor, cambios de dependencias permitidos y configuración de comprobaciones bloqueada | 23/23 superadas |
 | Escaneo de seguridad obligatorio (app#14) | PR con un `.pyc` en `__pycache__` | `governance` en rojo y merge bloqueado |
-| Agentes en Actions (`scripts/agent`) | 46 casos. Revisor y respuesta (16): publicación y fallo seguro de la revisión, hallazgos fuera del PR, orden por severidad, neutralización, sospecha de inyección, separación de instrucción y datos en los prompts e informes de respuesta. Agente autónomo (25): comprobaciones previas, prompt con datos, nombres de rama, alcance de la fase spec, textos del PR e informes. Commits por la API (5): altas, cambios y bajas, binarios, rechazo de ejecutables y enlaces, entrada de la mutación | 46/46 superadas |
+| Agentes en Actions (`scripts/agent`) | 47 casos. Revisor y respuesta (16): publicación y fallo seguro de la revisión, hallazgos fuera del PR, orden por severidad, neutralización, sospecha de inyección, separación de instrucción y datos en los prompts e informes de respuesta. Agente autónomo (26): comprobaciones previas, prompt con datos, nombres de rama (también con una spec existente modificada), alcance de la fase spec, textos del PR e informes. Commits por la API (5): altas, cambios y bajas, binarios, rechazo de ejecutables y enlaces, entrada de la mutación | 47/47 superadas |
 | Respuesta a `@claude` (app#16) | PR con tres tests de FR-009 que fallan y un comentario `@claude` | Commit del bot en 73 s, checks en verde, revisión publicada y sin bucle del bot |
 | Versiones (`release.py`) | 19 casos: *merge commit* y *squash*, tipo de cambio y salto de versión, cambios incompatibles, autoría del agente, prefijo de la plantilla, mensajes sin Conventional Commits y notas | 19/19 superadas |
 | Versiones reales | Merge `feat` en core; *Run workflow* en app | `v1.8.0` y `v1` movida solos; Release `v1.0.0` con la imagen de main etiquetada sin reconstruir |
@@ -905,6 +967,11 @@ El registro que sigue resume toda la conversación del proyecto. Se han omitido 
 | Cadena de suministro (app#21 y main) | Imagen sin digest en la base; imagen arrancada con búsqueda; publicación en main | CI en rojo con el digest correcto; prueba de humo superada; imagen firmada con dos atestaciones verificadas |
 | Commit verificado (app#22) | `@claude` en un PR tras el cambio a la API | `verified: true` (`valid`) |
 | Agente autónomo (issue #18) | Petición real con etiqueta `aprobado` | PR de spec en 2 min, PR de implementación en 2 min tras el merge, dos ajustes con `@claude`; issue cerrado en 25 min |
+| Puente alerta → issue (`puente.py`) | 8 casos: issue nuevo con el formato de la plantilla y su marcador, sin duplicar si ya hay uno abierto, alerta resuelta que comenta y no cierra, resuelta sin issue, una acción por alerta repetida, nombres no válidos, versión de webhook desconocida y texto neutralizado | 8/8 superadas |
+| Exportador (`exportador.py`) | 4 casos: agregación de resultados, duración y datos del modelo, ausencia de ejecuciones, cada métrica agrupada en la exposición y resumen con campos vacíos | 4/4 superadas |
+| Reglas de alerta (`promtool test rules`) | 4 casos: cada alerta salta con su condición y no salta sin ella | 4/4 superadas |
+| Ciclo de operación (app#29) | 60 búsquedas de 120 caracteres en staging | Issue abierto por el puente, triage, decisión, spec y feat del agente, promoción y 200 con 120 caracteres; 25 minutos de `aprobado` a cierre |
+| Alerta por despliegue (app#28) | Anotación de métricas desplegada antes que la imagen | Issue abierto y resuelto solo; cerrado sin `aprobado` |
 | Triage (`apply.py`, `build_prompt.py`) | 12 casos: salida estructurada, valores inválidos, etiquetas arbitrarias, referencias falsas, neutralización de texto, sospecha de inyección | 12/12 superadas |
 
 ### Pruebas del harness en el entorno real
@@ -951,22 +1018,27 @@ El caso de inyección prueba el diseño en dos niveles. El modelo detectó el in
 | Clave del promotor vacía en el job | Workflow reutilizable de otro repo y secreto de entorno | Declararlo en core y pasarlo desde app | La documentación no lo deja claro; hubo que probar tres configuraciones |
 | *Re-run* sin el arreglo de core | Un *Re-run* repite los workflows de la ejecución original | Disparador manual | Para probar un cambio de core hace falta una ejecución nueva |
 | Vulnerabilidad nueva en certifi | Publicada entre dos ejecuciones | Actualizar `uv.lock` | Un check puede romperse sin cambiar el código; lo aborda la tarea C |
+| Alerta al desplegar la observabilidad | La configuración llegó antes que la imagen que la sirve | Cerrar el issue con la causa | Una alerta no siempre es trabajo para el agente; la decisión humana lo filtra |
+| Grafana reiniciado por el liveness | SQLite en `emptyDir` y poca CPU: `/api/health` en 503 | WAL, más margen y más CPU (gitops#9) | Un 137 no siempre es memoria; hay que mirar el motivo del kubelet |
+| El agente rechaza su propia spec | El guardarraíl esperaba una sola carpeta de spec y la decisión pedía tocar dos | Buscar la carpeta nueva solo entre los ficheros creados (core#27) | Un guardarraíl demasiado estricto bloquea trabajo correcto; falló en seguro y con un mensaje claro |
+| El agente no puede ejecutar comandos | `ubuntu-latest` pasó a Ubuntu 26.04 y el sandbox no arranca | Runner fijado y comprobación previa (core#28) | Un cambio del proveedor puede desactivar una capa sin que nada falle; ahora el fallo es visible y para el job |
 | Prefijo «[Petición]» en los títulos de los PRs | El script copiaba el título del issue | Se quita el prefijo (core#15) | Los detalles de presentación también salen al usarlo de verdad |
 
 ## Métricas del proceso
 
 | Métrica | Valor |
 |---|---|
-| Tareas completadas | 13 de 18 (1, 2, 3, A, 4, 5, 6, 7, 8, F, 9, 10 y B) |
-| PRs fusionados | 41 (16 en core, 21 en app y 4 en gitops; cuatro abiertos por el agente, cuatro con commits suyos pedidos con `@claude` y dos abiertos por el promotor), más la documentación |
-| Pruebas automáticas | 263 superadas (57 de harness y triage, 23 de gobierno de PRs, 46 de los agentes en Actions, 8 de la cadena de suministro, 7 de la promoción, 19 de las versiones, 103 de la aplicación) |
-| Iteraciones registradas con el asistente | 107 |
+| Tareas completadas | 14 de 18 (1, 2, 3, A, 4, 5, 6, 7, 8, F, 9, 10, B y 11) |
+| PRs fusionados | 50 (18 en core, 24 en app y 8 en gitops; seis abiertos por el agente, cinco con commits suyos pedidos con `@claude` y cuatro abiertos por el promotor), más la documentación |
+| Pruebas automáticas | 294 superadas (57 de harness y triage, 23 de gobierno de PRs, 47 de los agentes en Actions, 8 de la cadena de suministro, 7 de la promoción, 19 de las versiones, 16 de la observabilidad y 117 de la aplicación) |
+| Iteraciones registradas con el asistente | 120 |
 | Versiones publicadas | core `v1.8.0` (automática) y app `v1.0.0` |
-| Tiempo de una feature con el agente autónomo | 25 minutos de la petición al cierre (issue #18), con cuatro decisiones humanas |
-| Problemas de entorno resueltos | 23 |
+| Tiempo de una feature con el agente autónomo | 25 minutos de la petición al cierre (issue #18), con cuatro decisiones humanas; 25 minutos de `aprobado` a cierre en un issue abierto por una alerta (#29), con cinco |
+| Alertas convertidas en issues | 2 (una cerrada sin trabajo, otra resuelta por el agente y desplegada) |
+| Problemas de entorno resueltos | 29 |
 | Vulnerabilidades de diseño detectadas antes de explotarse | 2 (aprobación imposible sin identidad propia; herencia de credenciales) |
 
-> Este capítulo se ampliará con las iteraciones y pruebas de las tareas 11 y 12 y C a E.
+> Este capítulo se ampliará con las iteraciones y pruebas de la tarea 12 y de C a E.
 
 # Documentación técnica reproducible
 
@@ -1138,7 +1210,29 @@ curl -s "localhost:8000/api/v1/productos?q=taza"
 3. Cuando `supply-chain` termine en `main`: *Actions → release → Run workflow* sobre `main`. Sale la Release `vX.Y.Z`, y la imagen `ghcr.io/…:vX.Y.Z` apunta al mismo digest que publicó main.
 4. Para desplegar esa versión, aprobar en gitops el PR de promoción con ese digest.
 
-> Los pasos de las tareas 11 y 12 y C a E se añadirán al completarlas.
+### Tarea 11. Observabilidad y alerta → issue
+
+1. En app: servir `/metrics` en el puerto de `METRICS_PORT` (app#27) y fusionar. Dejar que la imagen llegue a staging antes del paso 3.
+2. En la web de GitHub, en los ajustes de la cuenta (*Settings → Developer settings → Fine-grained tokens*), crear un token con acceso solo a `poc-almagentic-app`, *Issues* de lectura y escritura, *Actions* de solo lectura y 90 días de caducidad. Después, en WSL:
+
+```
+kubectl create namespace observabilidad --dry-run=client -o yaml | kubectl apply -f -
+printf 'Token de GitHub: '; read -s T; echo
+kubectl -n observabilidad create secret generic observabilidad-github --from-literal=token="$T"; unset T
+printf 'Contraseña de Grafana: '; read -s P; echo
+kubectl -n observabilidad create secret generic grafana-admin --from-literal=admin-user=admin --from-literal=admin-password="$P"; unset P
+```
+
+3. En gitops: añadir `argocd-apps/prometheus.yaml`, `grafana.yaml` y `observabilidad.yaml`, `cluster/observabilidad/` y las anotaciones de métricas de la API, y fusionar. Grafana queda en `localhost:3000` y Prometheus en `localhost:9090`.
+4. Probar el ciclo con búsquedas por encima del máximo, que desde app#31 es de 200 caracteres:
+
+```
+for i in $(seq 1 60); do curl -s -o /dev/null "localhost:8000/api/v1/productos?q=$(printf 'x%.0s' {1..250})"; sleep 2; done
+```
+
+5. En app: a los pocos minutos aparece un issue con la etiqueta `alerta` y su triage. Decidir en un comentario y añadir `aprobado`, o cerrarlo con la causa.
+
+> Los pasos de la tarea 12 y de C a E se añadirán al completarlas.
 
 ## Estructura de los repositorios
 
@@ -1160,6 +1254,7 @@ poc-almagentic-core/
 poc-almagentic-gitops/
   bootstrap/root-app.yaml       aplicación raíz de Argo CD
   argocd-apps/, cluster/, apps/ componentes del cluster y de la aplicación
+  cluster/observabilidad/       puente alerta → issue, exportador, paneles y pruebas de reglas
 ```
 
 ## Solución de problemas
@@ -1188,6 +1283,11 @@ poc-almagentic-gitops/
 | «A JSON web token could not be decoded» | La clave está mal pegada; volver a pegarla o usar `gh secret set … < fichero.pem` |
 | Un *Re-run* no recoge un arreglo de core | Lanzar una ejecución nueva con *Run workflow* |
 | `read: -p: no coprocess` | La terminal es zsh: `printf 'Contraseña: '; read -s P; echo` |
+| Se abre un issue de alerta justo después de desplegar | Revisar si la configuración llegó antes que la imagen; cerrar con la causa y sin `aprobado` |
+| Grafana se reinicia con código 137 sin `OOMKilled` | Mirar los eventos del pod; si es el liveness, aplicar gitops#9 (WAL y más margen) |
+| El agente rechaza la spec: «se esperaba una carpeta de spec nueva» | Con core v1.8.1 o posterior basta quitar y volver a poner `aprobado` |
+| El agente dice que no pudo ejecutar comandos | Comprobar en el paso del sandbox que el runner es Ubuntu 24.04 y que aparece «Sandbox (bubblewrap) operativo» |
+| Queda abierta una promoción antigua en gitops | Cerrarla sin fusionar: desplegaría una imagen anterior |
 | El merge de la spec no lanza la implementación | La rama del PR debe empezar por `spec/<issue>-` y venir del mismo repositorio |
 
 # Conclusiones y trabajo futuro
@@ -1204,6 +1304,9 @@ poc-almagentic-gitops/
 8. La confianza en el resultado no depende de confiar en el agente. Su commit lo firma GitHub a nombre de la App, la imagen la firma el pipeline de la plataforma y la procedencia une los dos, todo comprobable por cualquiera con herramientas públicas. El agente puede escribir código, pero no puede producir ninguna de esas firmas.
 9. El gate humano funciona porque es el único camino. El clúster solo cambia cuando se fusiona un PR en gitops: Argo CD deshace cualquier cambio manual, y el check rechaza cualquier imagen que no venga del pipeline de core. La aprobación deja de ser un trámite porque el PR dice exactamente qué se despliega y qué commits entran.
 10. Una versión es un nombre para algo que ya se verificó, no una construcción nueva. Al etiquetar la imagen firmada de main sin reconstruirla, la versión, la imagen probada, su procedencia y lo que corre en staging son la misma cosa. Y como las notas salen de los PRs, cualquiera ve qué cambios hizo el agente y quién los aprobó.
+
+11. Una alerta vale lo mismo que una petición escrita por una persona, y por eso no salta directamente al agente. Entra como issue, pasa por el triage y espera una decisión. En la prueba hubo dos alertas: una era un efecto del despliegue y se cerró sin trabajo; la otra llevó a un cambio de contrato que decidió el responsable y escribió el agente. El mismo ciclo sirvió para las dos, y la diferencia la puso la persona.
+12. Las capas de seguridad necesitan vigilarse a sí mismas. El sandbox dejó de funcionar por un cambio del proveedor de los runners sin que nada fallara, y el agente siguió trabajando sin poder probar su código. El CI lo compensó esta vez. Desde entonces el job comprueba el sandbox antes de llamar al modelo, igual que el devcontainer usa `failIfUnavailable` desde la tarea 4.
 
 ## Trabajo futuro
 

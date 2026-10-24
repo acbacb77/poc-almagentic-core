@@ -1,0 +1,317 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Operación: de la alerta al arreglo desplegado",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "backend": {
+          "label": "Agente o proceso"
+        },
+        "security": {
+          "label": "Control o aprobación"
+        },
+        "frontend": {
+          "label": "Artefacto en GitHub"
+        },
+        "messagebus": {
+          "label": "Promoción en gitops"
+        },
+        "cloud": {
+          "label": "Clúster"
+        }
+      }
+    }
+  },
+  "components": [
+    {
+      "id": "argo",
+      "type": "cloud",
+      "label": "Argo CD",
+      "sublabel": "sincroniza",
+      "pos": [
+        40,
+        50
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "staging",
+      "type": "cloud",
+      "label": "API en staging",
+      "sublabel": "métricas :9000",
+      "pos": [
+        260,
+        50
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "prometheus",
+      "type": "cloud",
+      "label": "Prometheus",
+      "sublabel": "regla de alerta",
+      "pos": [
+        480,
+        50
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "alertmanager",
+      "type": "cloud",
+      "label": "Alertmanager",
+      "sublabel": "webhook",
+      "pos": [
+        700,
+        50
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "puente",
+      "type": "backend",
+      "label": "Puente",
+      "sublabel": "alerta a issue",
+      "pos": [
+        920,
+        50
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "issue",
+      "type": "frontend",
+      "label": "Issue en app",
+      "sublabel": "formato de petición",
+      "pos": [
+        920,
+        190
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "triage",
+      "type": "backend",
+      "label": "Triage",
+      "sublabel": "propuesta",
+      "pos": [
+        700,
+        190
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "aprobado",
+      "type": "security",
+      "label": "Decisión humana",
+      "sublabel": "comentario y aprobado",
+      "pos": [
+        480,
+        190
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "agente",
+      "type": "backend",
+      "label": "Agente autónomo",
+      "sublabel": "PRs spec y feat",
+      "pos": [
+        260,
+        190
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "promo",
+      "type": "messagebus",
+      "label": "Promoción",
+      "sublabel": "merge humano",
+      "pos": [
+        40,
+        190
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "actions",
+      "type": "frontend",
+      "label": "Ejecuciones",
+      "sublabel": "de los agentes",
+      "pos": [
+        920,
+        330
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "exportador",
+      "type": "backend",
+      "label": "Exportador",
+      "sublabel": "telemetría",
+      "pos": [
+        700,
+        330
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "grafana",
+      "type": "cloud",
+      "label": "Grafana",
+      "sublabel": "paneles",
+      "pos": [
+        480,
+        330
+      ],
+      "size": [
+        140,
+        56
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Clúster local",
+      "wraps": [
+        "argo",
+        "staging",
+        "prometheus",
+        "alertmanager",
+        "puente"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Repo app",
+      "wraps": [
+        "issue",
+        "triage",
+        "aprobado",
+        "agente"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Telemetría de los agentes",
+      "wraps": [
+        "actions",
+        "exportador",
+        "grafana"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "e1",
+      "from": "argo",
+      "to": "staging",
+      "label": "por digest"
+    },
+    {
+      "id": "e2",
+      "from": "staging",
+      "to": "prometheus"
+    },
+    {
+      "id": "e3",
+      "from": "prometheus",
+      "to": "alertmanager",
+      "label": "dispara"
+    },
+    {
+      "id": "e4",
+      "from": "alertmanager",
+      "to": "puente"
+    },
+    {
+      "id": "e5",
+      "from": "puente",
+      "to": "issue",
+      "label": "token limitado",
+      "labelAt": [
+        1045,
+        148
+      ]
+    },
+    {
+      "id": "e6",
+      "from": "issue",
+      "to": "triage"
+    },
+    {
+      "id": "e7",
+      "from": "triage",
+      "to": "aprobado"
+    },
+    {
+      "id": "e8",
+      "from": "aprobado",
+      "to": "agente",
+      "label": "decisión"
+    },
+    {
+      "id": "e9",
+      "from": "agente",
+      "to": "promo",
+      "label": "imagen firmada"
+    },
+    {
+      "id": "e10",
+      "from": "promo",
+      "to": "argo"
+    },
+    {
+      "id": "e11",
+      "from": "actions",
+      "to": "exportador",
+      "label": "API de GitHub"
+    },
+    {
+      "id": "e12",
+      "from": "exportador",
+      "to": "grafana",
+      "label": "vía Prometheus"
+    }
+  ]
+}
