@@ -2,7 +2,7 @@
 
 Registro de todo lo hecho en la POC: decisiones, pasos manuales, PRs y problemas resueltos. Se actualiza al cerrar cada tarea, junto con la [memoria del TFM](../tfm/README.md), que es requisito para cerrar la POC.
 
-**Última actualización:** 24 de octubre de 2026 · **Avance:** 12 de 18 tareas (1, 2, 3, A, 4, 5, 6, 7, 8, F, 9 y 10)
+**Última actualización:** 24 de octubre de 2026 · **Avance:** 13 de 18 tareas (1, 2, 3, A, 4, 5, 6, 7, 8, F, 9, 10 y B)
 
 **Cada tarea tiene sus prerrequisitos manuales y sus subtareas en orden.** **Leyenda de responsables:** Usuario 👤 (acción manual) · Claude 🤖 (sesión de trabajo) · Agente (bot `almagentic-agent` en el devcontainer) · Automático ⚙️ (GitHub Actions, Argo CD)
 
@@ -39,8 +39,9 @@ Registro de todo lo hecho en la POC: decisiones, pasos manuales, PRs y problemas
 
 | Etiqueta | Apunta a | Creada por | Notas |
 |---|---|---|---|
-| `v1` | `8f0ad27` (core#23) | 👤 release desde la UI | Etiqueta móvil que usan las apps. Se mueve a cada `main` nueva de core. Automatizar en la tarea B |
-| `v1.7.2` | `8f0ad27` (core#23) | 👤 | Clave del promotor pasada explícitamente |
+| `v1` | `8a472a2` (core#25) | ⚙️ workflow `release` | Etiqueta móvil que usan app y gitops. **Desde la tarea B se mueve sola** en cada merge publicable |
+| `v1.8.0` | `8a472a2` (core#25) | ⚙️ | Versiones automáticas de core y versiones de app a demanda |
+| `v1.7.2` | `8f0ad27` (core#23) | 👤 (la última a mano) | Clave del promotor pasada explícitamente |
 | `v1.7.1` | `1264008` (core#22) | 👤 | Comprobación de la clave del promotor |
 | `v1.7.0` | `dc1165e` (core#21) | 👤 | Promoción a gitops y check de imágenes |
 | `v1.6.0` | `89832cf` (core#19) | 👤 | Commits del agente verificados |
@@ -71,8 +72,8 @@ Las tareas con letra son **extensiones ALM**: se añadieron al plan original y s
 | ↳ F | Agente autónomo en Actions | Extensión ALM (entre 8 y 9) | ✅ Hecha |
 | **9** | Supply chain | Principal | ✅ Hecha |
 | **10** | Deploy GitOps con gate humano | Principal | ✅ Hecha |
-| ↳ B | Gestión de releases | Extensión ALM (entre 10 y 11) | ⏭️ Siguiente |
-| **11** | Cerrar el loop de operación | Principal | Pendiente |
+| ↳ B | Gestión de releases | Extensión ALM (entre 10 y 11) | ✅ Hecha |
+| **11** | Cerrar el loop de operación | Principal | ⏭️ Siguiente |
 | ↳ C | Mantenimiento continuo | Extensión ALM (entre 11 y 12) | Pendiente |
 | ↳ D | Retirada de un endpoint v1 | Extensión ALM (entre 11 y 12) | Pendiente |
 | ↳ E | Informe de trazabilidad | Extensión ALM (entre 11 y 12) | Pendiente |
@@ -506,11 +507,11 @@ Cada imagen firmada de main la verifica el bot promotor, que abre un PR en gitop
 
 ---
 
-> ## ↳ Tarea B · Gestión de releases ⏭️
+> ## ↳ Tarea B · Gestión de releases ✅
 >
 > **Extensión ALM** · se ejecuta entre la tarea 10 y la 11.
 >
-> Versionado semántico, changelog y notas; automatizar las etiquetas de core.
+> core se versiona solo en cada merge publicable (vX.Y.Z y mueve v1). La app publica versiones a demanda: semver por Conventional Commits, notas con los cambios del agente y la imagen firmada de main etiquetada sin reconstruir.
 >
 > ### Prerrequisitos manuales
 >
@@ -520,13 +521,24 @@ Cada imagen firmada de main la verifica el bot promotor, que abre un PR en gitop
 >
 > | # | Subtarea | Quién | Estado | Enlaces |
 > |---|---|---|---|---|
-> | B.1 | Versionado y notas de versión con release-please | Claude 🤖 | ⬜ |  |
-> | B.2 | Automatizar las etiquetas de core (vX.Y.Z y mover v1) | Claude 🤖 | ⬜ |  |
-> | B.3 | Hasta entonces, crear o mover etiquetas de core a mano | Usuario 👤 | ⬜ |  |
+> | B.1 | Cálculo de versión y notas (release.py, 19 tests) | Claude 🤖 | ✅ | [core#25](https://github.com/acbacb77/poc-almagentic-core/pull/25) |
+> | B.2 | Versiones de core automáticas: vX.Y.Z y mover v1 | Claude 🤖 | ✅ | [core#25](https://github.com/acbacb77/poc-almagentic-core/pull/25) |
+> | B.3 | Versiones de la app con Run workflow, sin reconstruir la imagen | Claude 🤖 | ✅ | [core#25](https://github.com/acbacb77/poc-almagentic-core/pull/25) · [app#26](https://github.com/acbacb77/poc-almagentic-app/pull/26) |
+> | B.4 | create-github-app-token: app-id → client-id | Claude 🤖 | ✅ | [core#25](https://github.com/acbacb77/poc-almagentic-core/pull/25) |
+> | B.5 | Primera versión de la app: v1.0.0 | Usuario 👤 | ✅ |  |
+> | B.6 | Desplegar v1.0.0 en staging | Usuario 👤 | ✅ | [gitops#6](https://github.com/acbacb77/poc-almagentic-gitops/pull/6) |
+>
+> ### Detalle
+>
+> **Versiones de core**: automáticas en cada merge a main con `feat`, `fix`, `ci`… (workflow `release` de core). Crea `vX.Y.Z` con su Release y mueve `v1`; un cambio incompatible crea `v2`. **Ya no se mueven etiquetas a mano.**
+>
+> **Versiones de la app** (repo `poc-almagentic-app`): *Actions → release → Run workflow* sobre `main`, después de que `supply-chain` termine para ese commit. Si falla con «Nada que publicar», desde la última versión solo hubo documentación o pruebas; con «Imagen no publicada», espera a `supply-chain`.
+>
+> **Primera versión**: `v1.0.0` = `ghcr.io/acbacb77/poc-almagentic-app@sha256:8ace64ae…` (commit `3898e7c`), desplegada con gitops#6.
 
 ---
 
-## Tarea 11 · Cerrar el loop de operación ⬜
+## Tarea 11 · Cerrar el loop de operación ⏭️
 
 Alerta → issue → agente → PR, y panel de telemetría de los agentes.
 
@@ -542,8 +554,6 @@ Alerta → issue → agente → PR, y panel de telemetría de los agentes.
 | 11.2 | Puente alerta → issue | Claude 🤖 | ⬜ |  |
 | 11.3 | Collector OpenTelemetry y panel de actividad de los agentes | Claude 🤖 | ⬜ |  |
 | 11.4 | Provocar una alerta y seguir el ciclo | Usuario 👤 | ⬜ |  |
-
-_Subtareas previstas: se ajustarán al llegar a la tarea._
 
 ---
 
@@ -663,7 +673,9 @@ _Subtareas previstas: se ajustarán al llegar a la tarea._
 | *Re-run* no recoge un arreglo de core | Repite la versión de los workflows reutilizables de la ejecución original | Actions → supply-chain → **Run workflow** (app#24) |
 | «A JSON web token could not be decoded» | Clave `.pem` mal pegada (saltos de línea o `BEGIN`/`END`) | Volver a pegarla entera, o subirla con `gh secret set … < fichero.pem` |
 | `security / dependencies` falla en un PR que no toca dependencias | Vulnerabilidad nueva publicada en una dependencia (certifi, PYSEC-2026-4320) | Actualizarla en `uv.lock` (app#25); en la tarea C se automatiza |
-| Mismo commit, digest distinto | La imagen no es reproducible byte a byte | Cerrar la promoción redundante; mejora: promocionar sin reconstruir |
+| Mismo commit, digest distinto | La imagen no es reproducible byte a byte | Cerrar la promoción redundante; las versiones ya no reconstruyen (tarea B) |
+| `release` de app falla con «Nada que publicar» | Desde la última versión solo hay `docs`, `test`, `chore` o `spec` | Es lo esperado; no hay versión nueva |
+| `release` de app falla con «Imagen no publicada» | `supply-chain` aún no ha terminado para ese commit de main | Esperar y relanzar |
 
 ---
 
@@ -680,6 +692,5 @@ _Subtareas previstas: se ajustarán al llegar a la tarea._
 - Triage: mostrar en el comentario el motivo cuando el modelo devuelve un error (p. ej. el 401).
 - Revisor (app#15): fijar por SHA los workflows reutilizables que reciben secretos (tarea B).
 - Tarea 11: servir `/metrics` en un puerto aparte que el `LoadBalancer` no publique.
-- `actions/create-github-app-token`: `app-id` está obsoleto, usar `client-id` (tarea B).
 - Promocionar sin reconstruir la imagen o construcción reproducible (digests distintos para el mismo commit).
 - Argo CD: valorar verificación de firmas también dentro del clúster (Kyverno o policy-controller).

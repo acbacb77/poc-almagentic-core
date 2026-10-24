@@ -643,9 +643,33 @@ El responsable pidió dos cambios sobre la marcha. Quiso un usuario propio en la
 
 Una última observación: al relanzar la publicación del mismo commit salió otro digest, porque la imagen no es reproducible byte a byte. La promoción redundante se cerró, y queda como mejora promocionar sin reconstruir o hacer la construcción reproducible.
 
+## Extensión B: gestión de versiones
+
+Hasta la tarea 10, cada cambio en core obligaba al responsable a mover la etiqueta `v1` desde la web, y la aplicación no tenía números de versión: solo commits y digests. La extensión B resuelve las dos cosas. El responsable eligió entre dos opciones para cada una. Para la aplicación descartó un PR de *release* mantenido por un bot, que habría exigido otra GitHub App, y prefirió un workflow que lanza una persona. Para core prefirió seguir con `@v1` en lugar de fijar app y gitops por SHA, a cambio de que la etiqueta se mueva sola.
+
+![Figura 10. Versiones: core se versiona en cada merge; la aplicación, cuando una persona lo decide y sin reconstruir la imagen.](figuras/versiones.png)
+
+| Pieza | Qué hace |
+|---|---|
+| `scripts/release/release.py` | Calcula la siguiente versión a partir de los títulos de los PRs fusionados en `main` (Conventional Commits): `feat` sube la menor; `fix`, `ci`, `build` y similares, la de parche; `!` o `BREAKING CHANGE`, la mayor; la documentación, las pruebas y las especificaciones no generan versión. Entiende los *merge commits* de core y los *squash* de app, y marca con 🤖 los cambios en los que hay commits del agente, también los que entraron dentro de un *merge commit*. 19 tests |
+| `release.yml` (core) | En cada merge publicable crea `vX.Y.Z` con sus notas y mueve `v1`. Un cambio incompatible crearía `v2` y dejaría `v1` en su sitio |
+| `reusable-release.yml` y `release.yml` (app) | Una persona lo lanza desde `main`. Busca la imagen que main publicó para ese commit, la verifica y comprueba que su procedencia apunta al mismo commit. Le añade la etiqueta `vX.Y.Z` sin reconstruirla y publica la Release con las notas, el digest, si ya está en staging y el comando para verificarla |
+
+Etiquetar sin reconstruir cierra el problema de la tarea 10: el mismo commit daba digests distintos al reconstruirse. La imagen de la versión es exactamente la que se probó y se firmó en main, con sus atestaciones intactas.
+
+En el mismo cambio se sustituyó `app-id` por `client-id` en la acción que crea los tokens de las GitHub Apps, porque `app-id` está obsoleto. Se mantuvo el ID numérico de las Apps, que GitHub también acepta como emisor del JWT. Lo confirmó la siguiente promoción, que funcionó sin el aviso.
+
+### Resultado
+
+| Prueba | Resultado |
+|---|---|
+| Versión automática de core | Al fusionar core#25 (`feat`), el workflow creó `v1.8.0` con su Release y movió `v1` sin intervención |
+| Primera versión de la app | `v1.0.0` sobre el commit `3898e7c`. Las notas agrupan novedades, correcciones y otros cambios con enlace a cada PR, y marcan con 🤖 el catálogo (app#10), `Cache-Control` (app#16) y la búsqueda (app#20). La etiqueta `v1.0.0` de la imagen apunta al mismo digest que publicó main |
+| Despliegue de la versión | La Release indicaba «todavía no» en staging; el promotor ya había propuesto ese digest (gitops#6) y el responsable lo aprobó |
+
 ## Tareas pendientes
 
-> Las secciones de las tareas 11 y 12 y de las extensiones B a E se añadirán a medida que se implementen: *releases*, operación, mantenimiento, retirada y trazabilidad.
+> Las secciones de las tareas 11 y 12 y de las extensiones C a E se añadirán a medida que se implementen: operación, mantenimiento, retirada y trazabilidad.
 
 # Iteraciones con modelos, pruebas y resultados
 
@@ -851,6 +875,14 @@ El registro que sigue resume toda la conversación del proyecto. Se han omitido 
 | 103 | «Merged y validado que se ha desplegado» | Abre gitops#4 con una imagen no firmada: bloqueado | Bloqueo comprobado |
 | 104 | «En Repository secrets nunca hubo nada; relanzado y ok» | Concluye que la clave solo en el entorno basta, detecta que el mismo commit dio otro digest y cierra la tarea | Tarea 10 cerrada |
 
+### Fase 16 · Versiones (24 de octubre)
+
+| # | Petición del autor | Respuesta y acción del modelo | Resultado |
+|---|---|---|---|
+| 105 | «Continuamos» | Plantea dos decisiones con su coste: cómo crear las versiones de la app y si fijar core por SHA o seguir con `@v1` | Decisiones del autor |
+| 106 | Elige workflow manual para la app y `@v1` automático para core | Escribe `release.py` y lo prueba con el historial real de los dos repos; corrige tres detalles que salen al hacerlo (prefijo «[Petición]», autoría del agente dentro de un *merge commit* y mensajes sin Conventional Commits). Abre core#25 y app#26 | Extensión B preparada |
+| 107 | «Continúa» (tras fusionar y lanzar `release`) | Comprueba `v1.8.0` y `v1` movida solos, la promoción con `client-id` y la Release `v1.0.0` con su imagen | Extensión B cerrada |
+
 ## Pruebas realizadas y resultados
 
 ### Pruebas automáticas
@@ -864,6 +896,8 @@ El registro que sigue resume toda la conversación del proyecto. Se han omitido 
 | Escaneo de seguridad obligatorio (app#14) | PR con un `.pyc` en `__pycache__` | `governance` en rojo y merge bloqueado |
 | Agentes en Actions (`scripts/agent`) | 46 casos. Revisor y respuesta (16): publicación y fallo seguro de la revisión, hallazgos fuera del PR, orden por severidad, neutralización, sospecha de inyección, separación de instrucción y datos en los prompts e informes de respuesta. Agente autónomo (25): comprobaciones previas, prompt con datos, nombres de rama, alcance de la fase spec, textos del PR e informes. Commits por la API (5): altas, cambios y bajas, binarios, rechazo de ejecutables y enlaces, entrada de la mutación | 46/46 superadas |
 | Respuesta a `@claude` (app#16) | PR con tres tests de FR-009 que fallan y un comentario `@claude` | Commit del bot en 73 s, checks en verde, revisión publicada y sin bucle del bot |
+| Versiones (`release.py`) | 19 casos: *merge commit* y *squash*, tipo de cambio y salto de versión, cambios incompatibles, autoría del agente, prefijo de la plantilla, mensajes sin Conventional Commits y notas | 19/19 superadas |
+| Versiones reales | Merge `feat` en core; *Run workflow* en app | `v1.8.0` y `v1` movida solos; Release `v1.0.0` con la imagen de main etiquetada sin reconstruir |
 | Promoción (`promote.py`) | 7 casos: imágenes fijadas o no en manifiestos renderizados, cambio de digest de una sola imagen, errores y digest sin cambios | 7/7 superadas |
 | Promoción real (gitops#3) | Merge en app con imagen nueva | PR del bot verificado, check en verde, aprobación humana y despliegue por Argo CD |
 | Imagen no firmada (gitops#4) | `python:3.12-slim-bookworm` por digest en `apps/` | `verify / images` en rojo («Procedencia no válida») y merge bloqueado |
@@ -923,15 +957,16 @@ El caso de inyección prueba el diseño en dos niveles. El modelo detectó el in
 
 | Métrica | Valor |
 |---|---|
-| Tareas completadas | 12 de 18 (1, 2, 3, A, 4, 5, 6, 7, 8, F, 9 y 10) |
-| PRs fusionados | 38 (15 en core, 20 en app y 3 en gitops; cuatro abiertos por el agente, cuatro con commits suyos pedidos con `@claude` y uno abierto por el promotor), más la documentación |
-| Pruebas automáticas | 244 superadas (57 de harness y triage, 23 de gobierno de PRs, 46 de los agentes en Actions, 8 de la cadena de suministro, 7 de la promoción, 103 de la aplicación) |
-| Iteraciones registradas con el asistente | 104 |
+| Tareas completadas | 13 de 18 (1, 2, 3, A, 4, 5, 6, 7, 8, F, 9, 10 y B) |
+| PRs fusionados | 41 (16 en core, 21 en app y 4 en gitops; cuatro abiertos por el agente, cuatro con commits suyos pedidos con `@claude` y dos abiertos por el promotor), más la documentación |
+| Pruebas automáticas | 263 superadas (57 de harness y triage, 23 de gobierno de PRs, 46 de los agentes en Actions, 8 de la cadena de suministro, 7 de la promoción, 19 de las versiones, 103 de la aplicación) |
+| Iteraciones registradas con el asistente | 107 |
+| Versiones publicadas | core `v1.8.0` (automática) y app `v1.0.0` |
 | Tiempo de una feature con el agente autónomo | 25 minutos de la petición al cierre (issue #18), con cuatro decisiones humanas |
 | Problemas de entorno resueltos | 23 |
 | Vulnerabilidades de diseño detectadas antes de explotarse | 2 (aprobación imposible sin identidad propia; herencia de credenciales) |
 
-> Este capítulo se ampliará con las iteraciones y pruebas de las tareas 11 y 12 y B a E.
+> Este capítulo se ampliará con las iteraciones y pruebas de las tareas 11 y 12 y C a E.
 
 # Documentación técnica reproducible
 
@@ -1096,7 +1131,14 @@ curl -s "localhost:8000/api/v1/productos?q=taza"
 5. En app: añadir el job `promote` a `supply-chain.yml`, pasándole solo `PROMOTER_APP_PRIVATE_KEY`, y fusionar. El promotor abre en gitops un PR `deploy(staging): …`.
 6. En gitops: revisar el PR (digest, commits que entran, check en verde), aprobarlo y fusionarlo. Argo CD despliega en unos minutos.
 
-> Los pasos de las tareas 11 y 12 y B a E se añadirán al completarlas.
+### Extensión B. Versiones
+
+1. En core: añadir `scripts/release/`, `.github/workflows/release.yml` y `reusable-release.yml`, y fusionar. A partir de aquí, cada merge publicable crea `vX.Y.Z` y mueve `v1` solo.
+2. En app: añadir `.github/workflows/release.yml` (con `workflow_dispatch` y permisos `contents: write` y `packages: write`) y fusionar.
+3. Cuando `supply-chain` termine en `main`: *Actions → release → Run workflow* sobre `main`. Sale la Release `vX.Y.Z`, y la imagen `ghcr.io/…:vX.Y.Z` apunta al mismo digest que publicó main.
+4. Para desplegar esa versión, aprobar en gitops el PR de promoción con ese digest.
+
+> Los pasos de las tareas 11 y 12 y C a E se añadirán al completarlas.
 
 ## Estructura de los repositorios
 
@@ -1139,6 +1181,8 @@ poc-almagentic-gitops/
 | Al poner `aprobado` el bot comenta «El agente no ha empezado» | Leer el motivo: falta permiso de escritura, el issue tiene `triage:sospechoso` o ya existe la rama `spec/<issue>-…` |
 | `image / build` falla en «Imágenes base fijadas por digest» | Copiar en el `FROM` el digest que trae la anotación |
 | `release / publish` no puede subir a GHCR | El job que llama debe conceder `packages: write`, y el workflow reutilizable no puede declarar `permissions` a nivel de workflow |
+| `release` falla con «Nada que publicar» | Desde la última versión solo hubo documentación, pruebas o especificaciones |
+| `release` falla con «Imagen no publicada» | Esperar a que `supply-chain` termine en `main` para ese commit |
 | Argo CD sin aplicaciones ni namespace `staging` | Aplicar `bootstrap/root-app.yaml` |
 | `promote` falla con la clave vacía | Comprobar que el secreto está en el entorno `gitops-staging` y que app lo pasa explícitamente al workflow de core |
 | «A JSON web token could not be decoded» | La clave está mal pegada; volver a pegarla o usar `gh secret set … < fichero.pem` |
@@ -1159,6 +1203,7 @@ poc-almagentic-gitops/
 7. Con el agente lanzado por las decisiones humanas que ya existían, una feature pequeña pasó de petición a cierre en 25 minutos sin escribir ningún prompt. La persona no desaparece del ciclo: aprobó la petición, resolvió las dudas, revisó dos PRs y corrigió un fallo que el revisor señaló. Lo que desaparece es el trabajo de intermediario entre el issue y el agente.
 8. La confianza en el resultado no depende de confiar en el agente. Su commit lo firma GitHub a nombre de la App, la imagen la firma el pipeline de la plataforma y la procedencia une los dos, todo comprobable por cualquiera con herramientas públicas. El agente puede escribir código, pero no puede producir ninguna de esas firmas.
 9. El gate humano funciona porque es el único camino. El clúster solo cambia cuando se fusiona un PR en gitops: Argo CD deshace cualquier cambio manual, y el check rechaza cualquier imagen que no venga del pipeline de core. La aprobación deja de ser un trámite porque el PR dice exactamente qué se despliega y qué commits entran.
+10. Una versión es un nombre para algo que ya se verificó, no una construcción nueva. Al etiquetar la imagen firmada de main sin reconstruirla, la versión, la imagen probada, su procedencia y lo que corre en staging son la misma cosa. Y como las notas salen de los PRs, cualquiera ve qué cambios hizo el agente y quién los aprobó.
 
 ## Trabajo futuro
 
