@@ -103,12 +103,19 @@ def build_prompt(
 # ---------- names ----------
 
 
-def spec_names(issue: int, files: list[str]) -> dict:
-    dirs = {m.group(0) for f in files if (m := SPEC_DIR.match(f))}
+def spec_names(issue: int, files: list[str], added: list[str] | None = None) -> dict:
+    """Carpeta y rama de la spec nueva.
+
+    `added` son los ficheros creados (no modificados). Si se pasa, la carpeta nueva se
+    busca solo entre ellos, de modo que el agente puede además retocar una spec
+    existente cuando el issue lo pide (p. ej. cambiar un FR de la spec 002).
+    """
+    new = files if added is None else added
+    dirs = {m.group(0) for f in new if (m := SPEC_DIR.match(f))}
     if len(dirs) != 1:
         raise ValueError(f"se esperaba una carpeta de spec nueva y hay {len(dirs)}")
     spec_dir = dirs.pop().rstrip("/")
-    if f"{spec_dir}/spec.md" not in files:
+    if f"{spec_dir}/spec.md" not in new:
         raise ValueError(f"falta {spec_dir}/spec.md")
     slug = SPEC_DIR.match(spec_dir + "/").group(2)
     return {
@@ -276,7 +283,11 @@ def main(argv: list[str]) -> int:
         return 0
     if a.cmd == "names":
         names = (
-            spec_names(int(a.args[0]), _lines(a.args[1]))
+            spec_names(
+                int(a.args[0]),
+                _lines(a.args[1]),
+                _lines(a.args[2]) if len(a.args) > 2 else None,
+            )
             if a.phase == "spec"
             else implement_names(a.args[0])
         )
