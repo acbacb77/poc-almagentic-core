@@ -212,6 +212,7 @@ jobs:
           git -C app add -A
           git -C app diff --cached --binary "$BASE_SHA" > cambio.patch
           git -C app diff --cached --name-only "$BASE_SHA" > ficheros.txt
+          git -C app diff --cached --name-only --diff-filter=A "$BASE_SHA" > nuevos.txt
           echo "Ficheros cambiados:"; cat ficheros.txt
 
       - name: Guardar el resultado
@@ -225,6 +226,7 @@ jobs:
             spec-dir.txt
             cambio.patch
             ficheros.txt
+            nuevos.txt
             claude-output.json
           retention-days: 30
           if-no-files-found: ignore
@@ -293,7 +295,7 @@ jobs:
 
           # Rama y carpeta de la spec: las decide el script, no el modelo.
           if [ "$PHASE" = spec ]; then
-            if ! python3 "$F" names spec "$N" "$W/ficheros.txt" > "$W/nombres.env" 2> "$W/error.txt"; then
+            if ! python3 "$F" names spec "$N" "$W/ficheros.txt" "$W/nuevos.txt" > "$W/nombres.env" 2> "$W/error.txt"; then
               report rejected "$W/claude-output.json" --reason "$(tail -1 "$W/error.txt")" --run "$RUN_URL"; exit 1
             fi
           else

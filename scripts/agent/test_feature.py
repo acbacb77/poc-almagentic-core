@@ -159,3 +159,18 @@ def test_pr_text_quita_el_prefijo_de_la_plantilla(tmp_path):
         "spec", 18, "[Petición] buscar productos", str(tmp_path / "x.json"), "s"
     )
     assert title == "spec: Buscar productos (#18)"
+
+
+def test_spec_names_permite_modificar_una_spec_existente():
+    files = [
+        "specs/002-buscar-productos-nombre/spec.md",
+        "specs/003-ampliar-limite/spec.md",
+        "specs/003-ampliar-limite/checklists/requirements.md",
+    ]
+    with pytest.raises(ValueError, match="hay 2"):
+        f.spec_names(29, files)
+    n = f.spec_names(29, files, files[1:])
+    assert n["spec_dir"] == "specs/003-ampliar-limite"
+    assert n["branch"] == "spec/29-ampliar-limite"
+    with pytest.raises(ValueError, match="hay 0"):
+        f.spec_names(29, files, [])
