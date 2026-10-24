@@ -49,7 +49,10 @@ env:
 
 jobs:
   work:
-    runs-on: ubuntu-latest
+    # Fijado a 24.04: desde el 19-10-2026 ubuntu-latest pasa a Ubuntu 26 y allí el sandbox
+    # de Claude Code no arranca (apply-seccomp: write /proc/self/setgroups), así que el
+    # agente no podía ejecutar ni tests ni linters.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: read
@@ -106,6 +109,15 @@ jobs:
           npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
           sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap socat
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          # Si el sandbox no funciona, el agente escribe código sin poder probarlo.
+          # Mejor parar aquí, antes de gastar una llamada al modelo.
+          . /etc/os-release
+          echo "Runner: ${PRETTY_NAME}, imagen ${ImageOS:-?} ${ImageVersion:-?}"
+          if ! bwrap --unshare-user --unshare-pid --ro-bind / / --dev /dev --proc /proc true 2> bwrap.err; then
+            echo "::error title=Sandbox del agente no disponible::${PRETTY_NAME}: $(tr '\n' ' ' < bwrap.err)"
+            exit 1
+          fi
+          echo "Sandbox (bubblewrap) operativo"
 
       - name: Dependencias de la aplicación
         working-directory: app
