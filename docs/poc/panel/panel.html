@@ -1280,39 +1280,155 @@ const TASKS = [
   "id": "11",
   "title": "Cerrar el loop de operación",
   "phase": "Operación",
-  "status": "next",
-  "desc": "Alerta → issue → agente → PR, y panel de telemetría de los agentes.",
+  "status": "done",
+  "desc": "Prometheus vigila la API en staging. Una alerta llega por Alertmanager a un puente que abre un issue en app con el formato de petición; sigue el camino normal (triage, decisión humana, agente, revisión, promoción). Grafana muestra la API y la actividad de los agentes, leída de la API de GitHub.",
   "alm": null,
   "prereqs": [
    [
-    "Token del puente alerta → issue como secreto del cluster",
-    false
+    "Token personal de grano fino (solo app: Issues escritura, Actions lectura) como Secret observabilidad-github",
+    true
+   ],
+   [
+    "Secret grafana-admin con la contraseña de Grafana",
+    true
    ]
   ],
   "subs": [
    [
-    "Prometheus, Grafana y Alertmanager en el cluster",
+    "/metrics en un puerto propio (9000) que el LoadBalancer no publica",
     "claude",
-    false,
-    []
+    true,
+    [
+     {
+      "label": "app#27",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/27"
+     }
+    ]
    ],
    [
-    "Puente alerta → issue",
+    "Prometheus, Alertmanager y Grafana; reglas BusquedasRechazadas y ApiSinRespuesta; puente alerta → issue; exportador de telemetría de los agentes; paneles",
     "claude",
-    false,
-    []
+    true,
+    [
+     {
+      "label": "gitops#7",
+      "href": "https://github.com/acbacb77/poc-almagentic-gitops/pull/7"
+     }
+    ]
    ],
    [
-    "Collector OpenTelemetry y panel de actividad de los agentes",
-    "claude",
-    false,
-    []
-   ],
-   [
-    "Provocar una alerta y seguir el ciclo",
+    "Desplegar la imagen con métricas",
     "usuario",
-    false,
-    []
+    true,
+    [
+     {
+      "label": "gitops#8",
+      "href": "https://github.com/acbacb77/poc-almagentic-gitops/pull/8"
+     }
+    ]
+   ],
+   [
+    "Alerta no prevista ApiSinRespuesta por el orden de despliegue: cerrada con la causa",
+    "usuario",
+    true,
+    [
+     {
+      "label": "#28 ApiSinRespuesta",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/issues/28"
+     }
+    ]
+   ],
+   [
+    "Provocar BusquedasRechazadas: el puente abre el issue y el triage lo clasifica",
+    "usuario",
+    true,
+    [
+     {
+      "label": "#29 BusquedasRechazadas",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/issues/29"
+     }
+    ]
+   ],
+   [
+    "Decisión: subir el máximo de q a 200 y añadir aprobado",
+    "usuario",
+    true,
+    [
+     {
+      "label": "#29 BusquedasRechazadas",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/issues/29"
+     }
+    ]
+   ],
+   [
+    "Arreglo: la fase spec puede retocar una spec existente",
+    "claude",
+    true,
+    [
+     {
+      "label": "core#27",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/27"
+     }
+    ]
+   ],
+   [
+    "El agente escribe la spec 003 y la implementación; un @claude corrige un E501",
+    "agente",
+    true,
+    [
+     {
+      "label": "app#30",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/30"
+     },
+     {
+      "label": "app#31",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/31"
+     }
+    ]
+   ],
+   [
+    "Arreglo: agente en ubuntu-24.04 y comprobación del sandbox (Ubuntu 26.04 lo rompía)",
+    "claude",
+    true,
+    [
+     {
+      "label": "core#28",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/28"
+     }
+    ]
+   ],
+   [
+    "Promoción del arreglo a staging",
+    "usuario",
+    true,
+    [
+     {
+      "label": "gitops#11",
+      "href": "https://github.com/acbacb77/poc-almagentic-gitops/pull/11"
+     }
+    ]
+   ],
+   [
+    "Grafana estable: SQLite en WAL y liveness con margen",
+    "claude",
+    true,
+    [
+     {
+      "label": "gitops#9",
+      "href": "https://github.com/acbacb77/poc-almagentic-gitops/pull/9"
+     }
+    ]
+   ],
+   [
+    "Texto de la alerta con el nuevo máximo",
+    "claude",
+    true,
+    [
+     {
+      "label": "gitops#12",
+      "href": "https://github.com/acbacb77/poc-almagentic-gitops/pull/12"
+     }
+    ]
    ]
   ]
  },
@@ -1320,7 +1436,7 @@ const TASKS = [
   "id": "C",
   "title": "Mantenimiento continuo",
   "phase": "Operación",
-  "status": "todo",
+  "status": "next",
   "desc": "Actualización de dependencias y evals del harness al cambiar de modelo.",
   "alm": [
    "11",

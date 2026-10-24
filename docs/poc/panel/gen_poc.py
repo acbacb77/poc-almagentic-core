@@ -162,14 +162,23 @@ TASKS = [
                ("create-github-app-token: app-id → client-id", "claude", True, [pr("core", 25)]),
                ("Primera versión de la app: v1.0.0", "usuario", True, []),
                ("Desplegar v1.0.0 en staging", "usuario", True, [pr("gitops", 6)])]),
-    dict(id="11", title="Cerrar el loop de operación", phase="Operación", status="next",
-         desc="Alerta → issue → agente → PR, y panel de telemetría de los agentes.",
-         prereqs=[("Token del puente alerta → issue como secreto del cluster", False)],
-         subs=[("Prometheus, Grafana y Alertmanager en el cluster", "claude", False, []),
-               ("Puente alerta → issue", "claude", False, []),
-               ("Collector OpenTelemetry y panel de actividad de los agentes", "claude", False, []),
-               ("Provocar una alerta y seguir el ciclo", "usuario", False, [])]),
-    dict(id="C", title="Mantenimiento continuo", phase="Operación", status="todo",
+    dict(id="11", title="Cerrar el loop de operación", phase="Operación", status="done",
+         desc="Prometheus vigila la API en staging. Una alerta llega por Alertmanager a un puente que abre un issue en app con el formato de petición; sigue el camino normal (triage, decisión humana, agente, revisión, promoción). Grafana muestra la API y la actividad de los agentes, leída de la API de GitHub.",
+         prereqs=[("Token personal de grano fino (solo app: Issues escritura, Actions lectura) como Secret observabilidad-github", True),
+                  ("Secret grafana-admin con la contraseña de Grafana", True)],
+         subs=[("/metrics en un puerto propio (9000) que el LoadBalancer no publica", "claude", True, [pr("app", 27)]),
+               ("Prometheus, Alertmanager y Grafana; reglas BusquedasRechazadas y ApiSinRespuesta; puente alerta → issue; exportador de telemetría de los agentes; paneles", "claude", True, [pr("gitops", 7)]),
+               ("Desplegar la imagen con métricas", "usuario", True, [pr("gitops", 8)]),
+               ("Alerta no prevista ApiSinRespuesta por el orden de despliegue: cerrada con la causa", "usuario", True, [issue(28, "ApiSinRespuesta")]),
+               ("Provocar BusquedasRechazadas: el puente abre el issue y el triage lo clasifica", "usuario", True, [issue(29, "BusquedasRechazadas")]),
+               ("Decisión: subir el máximo de q a 200 y añadir aprobado", "usuario", True, [issue(29, "BusquedasRechazadas")]),
+               ("Arreglo: la fase spec puede retocar una spec existente", "claude", True, [pr("core", 27)]),
+               ("El agente escribe la spec 003 y la implementación; un @claude corrige un E501", "agente", True, [pr("app", 30), pr("app", 31)]),
+               ("Arreglo: agente en ubuntu-24.04 y comprobación del sandbox (Ubuntu 26.04 lo rompía)", "claude", True, [pr("core", 28)]),
+               ("Promoción del arreglo a staging", "usuario", True, [pr("gitops", 11)]),
+               ("Grafana estable: SQLite en WAL y liveness con margen", "claude", True, [pr("gitops", 9)]),
+               ("Texto de la alerta con el nuevo máximo", "claude", True, [pr("gitops", 12)])]),
+    dict(id="C", title="Mantenimiento continuo", phase="Operación", status="next",
          desc="Actualización de dependencias y evals del harness al cambiar de modelo.",
          prereqs=[],
          subs=[("Dependabot en app", "claude", False, []),
@@ -312,6 +321,13 @@ DETAILS = {
 **Versiones de la app** (repo `poc-almagentic-app`): *Actions → release → Run workflow* sobre `main`, después de que `supply-chain` termine para ese commit. Si falla con «Nada que publicar», desde la última versión solo hubo documentación o pruebas; con «Imagen no publicada», espera a `supply-chain`.
 
 **Primera versión**: `v1.0.0` = `ghcr.io/acbacb77/poc-almagentic-app@sha256:8ace64ae…` (commit `3898e7c`), desplegada con gitops#6.""",
+    "11": """**Secretos** (en WSL, una vez, nunca en git): `observabilidad-github` con un token personal de grano fino creado en *Settings de tu cuenta → Developer settings → Fine-grained tokens* (solo `poc-almagentic-app`; Issues lectura y escritura, Actions lectura; 90 días) y `grafana-admin`. Comandos en el [README de gitops](https://github.com/acbacb77/poc-almagentic-gitops#observabilidad-tarea-11).
+
+**Direcciones**: Grafana `localhost:3000` (paneles «API del catálogo» y «Actividad de los agentes»), Prometheus `localhost:9090`. Las métricas de la API van por el puerto 9000 del pod, que el `Service` no publica.
+
+**Ciclo probado** (25 min de la etiqueta al cierre, con dos fallos de la plataforma resueltos por el camino): alerta `BusquedasRechazadas` → issue app#29 abierto por el puente → triage → decisión en un comentario y `aprobado` → spec 003 (app#30) → implementación (app#31) y `@claude` para un E501 → promoción gitops#11 → q de 120 caracteres devuelve 200.
+
+**Problemas típicos**: una alerta se puede disparar por el orden de despliegue (anotaciones antes que la imagen que las sirve): se cierra el issue con la causa y sin `aprobado`. Grafana 13 con SQLite en `emptyDir` se reiniciaba por el liveness (503 en `/api/health`): WAL y más margen (gitops#9). Si el agente dice que no pudo ejecutar comandos, mira el paso «Claude Code y dependencias del sandbox»: debe decir Ubuntu 24.04 y «Sandbox (bubblewrap) operativo».""",
     "10": """**Cómo preparar el cluster**: pasos en el [README de gitops](https://github.com/acbacb77/poc-almagentic-gitops#puesta-en-marcha-una-sola-vez). La API queda en `localhost:8000` (o `host.docker.internal:8000`).
 
 **Flujo**: merge en app → imagen firmada → el promotor verifica procedencia desde main, SBOM y firma → PR en gitops con el digest y los commits → `verify / images` → **tu aprobación y merge** → Argo CD sincroniza staging. Para volver atrás, revertir el PR de promoción. Para relanzar: Actions → supply-chain → Run workflow (un *Re-run* repite la versión antigua de core).

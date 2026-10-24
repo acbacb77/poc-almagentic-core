@@ -2,7 +2,7 @@
 
 Registro de todo lo hecho en la POC: decisiones, pasos manuales, PRs y problemas resueltos. Se actualiza al cerrar cada tarea, junto con la [memoria del TFM](../tfm/README.md), que es requisito para cerrar la POC.
 
-**Última actualización:** 24 de octubre de 2026 · **Avance:** 13 de 18 tareas (1, 2, 3, A, 4, 5, 6, 7, 8, F, 9, 10 y B)
+**Última actualización:** 24 de octubre de 2026 · **Avance:** 14 de 18 tareas (1, 2, 3, A, 4, 5, 6, 7, 8, F, 9, 10, B y 11)
 
 **Cada tarea tiene sus prerrequisitos manuales y sus subtareas en orden.** **Leyenda de responsables:** Usuario 👤 (acción manual) · Claude 🤖 (sesión de trabajo) · Agente (bot `almagentic-agent` en el devcontainer) · Automático ⚙️ (GitHub Actions, Argo CD)
 
@@ -73,8 +73,8 @@ Las tareas con letra son **extensiones ALM**: se añadieron al plan original y s
 | **9** | Supply chain | Principal | ✅ Hecha |
 | **10** | Deploy GitOps con gate humano | Principal | ✅ Hecha |
 | ↳ B | Gestión de releases | Extensión ALM (entre 10 y 11) | ✅ Hecha |
-| **11** | Cerrar el loop de operación | Principal | ⏭️ Siguiente |
-| ↳ C | Mantenimiento continuo | Extensión ALM (entre 11 y 12) | Pendiente |
+| **11** | Cerrar el loop de operación | Principal | ✅ Hecha |
+| ↳ C | Mantenimiento continuo | Extensión ALM (entre 11 y 12) | ⏭️ Siguiente |
 | ↳ D | Retirada de un endpoint v1 | Extensión ALM (entre 11 y 12) | Pendiente |
 | ↳ E | Informe de trazabilidad | Extensión ALM (entre 11 y 12) | Pendiente |
 | **12** | Guion y ensayo de la demo | Principal | Pendiente |
@@ -538,26 +538,45 @@ Cada imagen firmada de main la verifica el bot promotor, que abre un PR en gitop
 
 ---
 
-## Tarea 11 · Cerrar el loop de operación ⏭️
+## Tarea 11 · Cerrar el loop de operación ✅
 
-Alerta → issue → agente → PR, y panel de telemetría de los agentes.
+Prometheus vigila la API en staging. Una alerta llega por Alertmanager a un puente que abre un issue en app con el formato de petición; sigue el camino normal (triage, decisión humana, agente, revisión, promoción). Grafana muestra la API y la actividad de los agentes, leída de la API de GitHub.
 
 ### Prerrequisitos manuales
 
-- ⬜ Token del puente alerta → issue como secreto del cluster
+- ✅ Token personal de grano fino (solo app: Issues escritura, Actions lectura) como Secret observabilidad-github
+- ✅ Secret grafana-admin con la contraseña de Grafana
 
 ### Subtareas
 
 | # | Subtarea | Quién | Estado | Enlaces |
 |---|---|---|---|---|
-| 11.1 | Prometheus, Grafana y Alertmanager en el cluster | Claude 🤖 | ⬜ |  |
-| 11.2 | Puente alerta → issue | Claude 🤖 | ⬜ |  |
-| 11.3 | Collector OpenTelemetry y panel de actividad de los agentes | Claude 🤖 | ⬜ |  |
-| 11.4 | Provocar una alerta y seguir el ciclo | Usuario 👤 | ⬜ |  |
+| 11.1 | /metrics en un puerto propio (9000) que el LoadBalancer no publica | Claude 🤖 | ✅ | [app#27](https://github.com/acbacb77/poc-almagentic-app/pull/27) |
+| 11.2 | Prometheus, Alertmanager y Grafana; reglas BusquedasRechazadas y ApiSinRespuesta; puente alerta → issue; exportador de telemetría de los agentes; paneles | Claude 🤖 | ✅ | [gitops#7](https://github.com/acbacb77/poc-almagentic-gitops/pull/7) |
+| 11.3 | Desplegar la imagen con métricas | Usuario 👤 | ✅ | [gitops#8](https://github.com/acbacb77/poc-almagentic-gitops/pull/8) |
+| 11.4 | Alerta no prevista ApiSinRespuesta por el orden de despliegue: cerrada con la causa | Usuario 👤 | ✅ | [#28 ApiSinRespuesta](https://github.com/acbacb77/poc-almagentic-app/issues/28) |
+| 11.5 | Provocar BusquedasRechazadas: el puente abre el issue y el triage lo clasifica | Usuario 👤 | ✅ | [#29 BusquedasRechazadas](https://github.com/acbacb77/poc-almagentic-app/issues/29) |
+| 11.6 | Decisión: subir el máximo de q a 200 y añadir aprobado | Usuario 👤 | ✅ | [#29 BusquedasRechazadas](https://github.com/acbacb77/poc-almagentic-app/issues/29) |
+| 11.7 | Arreglo: la fase spec puede retocar una spec existente | Claude 🤖 | ✅ | [core#27](https://github.com/acbacb77/poc-almagentic-core/pull/27) |
+| 11.8 | El agente escribe la spec 003 y la implementación; un @claude corrige un E501 | Agente (bot) | ✅ | [app#30](https://github.com/acbacb77/poc-almagentic-app/pull/30) · [app#31](https://github.com/acbacb77/poc-almagentic-app/pull/31) |
+| 11.9 | Arreglo: agente en ubuntu-24.04 y comprobación del sandbox (Ubuntu 26.04 lo rompía) | Claude 🤖 | ✅ | [core#28](https://github.com/acbacb77/poc-almagentic-core/pull/28) |
+| 11.10 | Promoción del arreglo a staging | Usuario 👤 | ✅ | [gitops#11](https://github.com/acbacb77/poc-almagentic-gitops/pull/11) |
+| 11.11 | Grafana estable: SQLite en WAL y liveness con margen | Claude 🤖 | ✅ | [gitops#9](https://github.com/acbacb77/poc-almagentic-gitops/pull/9) |
+| 11.12 | Texto de la alerta con el nuevo máximo | Claude 🤖 | ✅ | [gitops#12](https://github.com/acbacb77/poc-almagentic-gitops/pull/12) |
+
+### Detalle
+
+**Secretos** (en WSL, una vez, nunca en git): `observabilidad-github` con un token personal de grano fino creado en *Settings de tu cuenta → Developer settings → Fine-grained tokens* (solo `poc-almagentic-app`; Issues lectura y escritura, Actions lectura; 90 días) y `grafana-admin`. Comandos en el [README de gitops](https://github.com/acbacb77/poc-almagentic-gitops#observabilidad-tarea-11).
+
+**Direcciones**: Grafana `localhost:3000` (paneles «API del catálogo» y «Actividad de los agentes»), Prometheus `localhost:9090`. Las métricas de la API van por el puerto 9000 del pod, que el `Service` no publica.
+
+**Ciclo probado** (25 min de la etiqueta al cierre, con dos fallos de la plataforma resueltos por el camino): alerta `BusquedasRechazadas` → issue app#29 abierto por el puente → triage → decisión en un comentario y `aprobado` → spec 003 (app#30) → implementación (app#31) y `@claude` para un E501 → promoción gitops#11 → q de 120 caracteres devuelve 200.
+
+**Problemas típicos**: una alerta se puede disparar por el orden de despliegue (anotaciones antes que la imagen que las sirve): se cierra el issue con la causa y sin `aprobado`. Grafana 13 con SQLite en `emptyDir` se reiniciaba por el liveness (503 en `/api/health`): WAL y más margen (gitops#9). Si el agente dice que no pudo ejecutar comandos, mira el paso «Claude Code y dependencias del sandbox»: debe decir Ubuntu 24.04 y «Sandbox (bubblewrap) operativo».
 
 ---
 
-> ## ↳ Tarea C · Mantenimiento continuo ⬜
+> ## ↳ Tarea C · Mantenimiento continuo ⏭️
 >
 > **Extensión ALM** · se ejecuta entre la tarea 11 y la 12.
 >
@@ -573,8 +592,6 @@ Alerta → issue → agente → PR, y panel de telemetría de los agentes.
 > |---|---|---|---|---|
 > | C.1 | Dependabot en app | Claude 🤖 | ⬜ |  |
 > | C.2 | Evals del harness al cambiar de modelo | Claude 🤖 | ⬜ |  |
->
-> _Subtareas previstas: se ajustarán al llegar a la tarea._
 
 ---
 
@@ -676,6 +693,12 @@ _Subtareas previstas: se ajustarán al llegar a la tarea._
 | Mismo commit, digest distinto | La imagen no es reproducible byte a byte | Cerrar la promoción redundante; las versiones ya no reconstruyen (tarea B) |
 | `release` de app falla con «Nada que publicar» | Desde la última versión solo hay `docs`, `test`, `chore` o `spec` | Es lo esperado; no hay versión nueva |
 | `release` de app falla con «Imagen no publicada» | `supply-chain` aún no ha terminado para ese commit de main | Esperar y relanzar |
+| Se abre un issue `ApiSinRespuesta` justo al desplegar la observabilidad | gitops#7 anotó el puerto 9000 antes de que la imagen que lo sirve (app#27) estuviera en staging | Cerrar el issue con la causa y sin `aprobado` (app#28); en adelante, desplegar primero la imagen y después las anotaciones |
+| El pod de Grafana se reinicia cada ~20 min (exit 137, sin OOM) | Grafana 13 con SQLite en `emptyDir`: `/api/health` devuelve 503 mientras escribe y el liveness lo mata | SQLite en WAL, `busy_timeout`, liveness con más margen y más CPU (gitops#9) |
+| Grafana parado a mano vuelve a arrancar | Argo CD (`selfHeal`) restaura el estado de git | Cambiarlo por PR en gitops |
+| El agente rechaza su propia spec: «se esperaba una carpeta de spec nueva y hay 2» | La decisión pedía crear la spec 003 y retocar FR-009 de la 002; el guardarraíl contaba todas las carpetas tocadas | La carpeta nueva se busca solo entre los ficheros añadidos (core#27); quitar y volver a poner `aprobado` |
+| El agente no puede ejecutar comandos (`apply-seccomp: write /proc/self/setgroups`) y llega un E501 al PR | `ubuntu-latest` pasó a Ubuntu 26.04 el 19-10-2026 y allí el sandbox no arranca | Jobs del agente en `ubuntu-24.04` y comprobación de bubblewrap antes del modelo (core#28) |
+| Queda abierta una promoción antigua en gitops | El promotor no cierra las promociones a las que sustituye una más nueva | Cerrarla a mano sin fusionar (gitops#10) |
 
 ---
 
@@ -691,6 +714,8 @@ _Subtareas previstas: se ajustarán al llegar a la tarea._
 
 - Triage: mostrar en el comentario el motivo cuando el modelo devuelve un error (p. ej. el 401).
 - Revisor (app#15): fijar por SHA los workflows reutilizables que reciben secretos (tarea B).
-- Tarea 11: servir `/metrics` en un puerto aparte que el `LoadBalancer` no publique.
+- Promotor: cerrar automáticamente las promociones sustituidas por una más nueva.
+- Sandbox del agente en Ubuntu 26.04 (hoy fijado a `ubuntu-24.04`) y resto de workflows al pasar `ubuntu-latest` a 26.
+- Grafana: si vuelve a reiniciarse, volumen persistente o base de datos externa.
 - Promocionar sin reconstruir la imagen o construcción reproducible (digests distintos para el mismo commit).
 - Argo CD: valorar verificación de firmas también dentro del clúster (Kyverno o policy-controller).
