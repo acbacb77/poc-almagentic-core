@@ -23,7 +23,7 @@ def untrusted(text: str | None, limit: int) -> str:
     """Texto escrito por terceros: se recorta y no puede cerrar la etiqueta que lo envuelve."""
     s = clip(str(text or ""), limit)
     return re.sub(
-        r"</?\s*(datos|instruccion|spec|diff|pr)\b",
+        r"</?\s*(datos|instruccion|spec|diff|pr|decisiones)\b",
         "[etiqueta eliminada]",
         s,
         flags=re.I,

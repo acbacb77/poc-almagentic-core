@@ -103,3 +103,16 @@ def test_peticion_de_una_alerta():
 
     f = t.construir(con_alerta, {"cambios": PLAN["cambios"][:1]}, APP, GITOPS)[0]
     assert f["peticion"]["origen"] == "alerta de Prometheus"
+
+
+def test_pr_propio_no_se_marca_como_bypass():
+    api = fake()
+
+    def propio(ruta):
+        r = api(ruta)
+        if ruta == f"repos/{APP}/pulls/34":
+            r = {**r, "user": {"login": "persona"}}
+        return r
+
+    md = t.markdown(t.construir(propio, {"cambios": PLAN["cambios"][1:]}, APP, GITOPS), APP, GITOPS)
+    assert "PR propio" in md and "bypass" not in md

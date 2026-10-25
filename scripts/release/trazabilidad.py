@@ -186,8 +186,12 @@ def markdown(filas: list[dict], repo: str, gitops: str) -> str:
             codigo += f" + {a['rondas_claude']} @claude"
         codigo += "" if a["verificados"] else " · commits sin verificar"
         rev = r["revisor_automatico"] or "-"
-        apr = (", ".join(f"@{u}" for u in r["aprobado_por"]) if r["aprobado_por"]
-               else f"bypass de @{r['fusionado_por']}")
+        if r["aprobado_por"]:
+            apr = ", ".join(f"@{u}" for u in r["aprobado_por"])
+        elif a["autor"] == r["fusionado_por"]:
+            apr = "PR propio (GitHub no deja aprobarlo)"
+        else:
+            apr = f"bypass de @{r['fusionado_por']}"
         chk = " ".join("✅" if v == "success" else f"❌ {k}" for k, v in f["checks"].items())
         dep = f["despliegue"]
         if dep:

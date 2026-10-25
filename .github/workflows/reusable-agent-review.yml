@@ -55,11 +55,16 @@ jobs:
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
         run: |
           jq '{title: .pull_request.title, body: .pull_request.body}' "$GITHUB_EVENT_PATH" > pr.json
+          # Comentarios del PR: review_prompt.py se queda con los de responsables como «decisiones».
+          gh api "repos/${REPO}/issues/${PR}/comments?per_page=100" > comentarios.json || echo '[]' > comentarios.json
           git -C app diff --name-only "$BASE...$HEAD" > ficheros.txt
           cd core/scripts/agent
-          python3 review_prompt.py ../../prompts/review.md "$GITHUB_WORKSPACE/app" "$BASE" "$HEAD" "$GITHUB_WORKSPACE/pr.json" > "$GITHUB_WORKSPACE/prompt.md"
+          python3 review_prompt.py ../../prompts/review.md "$GITHUB_WORKSPACE/app" "$BASE" "$HEAD" "$GITHUB_WORKSPACE/pr.json" "$GITHUB_WORKSPACE/comentarios.json" > "$GITHUB_WORKSPACE/prompt.md"
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
