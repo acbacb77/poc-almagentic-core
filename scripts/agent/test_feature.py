@@ -174,3 +174,13 @@ def test_spec_names_permite_modificar_una_spec_existente():
     assert n["branch"] == "spec/29-ampliar-limite"
     with pytest.raises(ValueError, match="hay 0"):
         f.spec_names(29, files, [])
+
+
+def test_pr_text_de_una_retirada_es_incompatible(tmp_path):
+    out = str(tmp_path / "x.json")
+    title, body = f.pr_text(
+        "implement", 40, "[Petición] Retirar v1", out, "s", breaking=True
+    )
+    assert title == "feat!: Retirar v1 (#40)" and "BREAKING CHANGE:" in body
+    title, body = f.pr_text("spec", 40, "Retirar v1", out, "s", breaking=True)
+    assert title.startswith("spec: ") and "BREAKING CHANGE" not in body
