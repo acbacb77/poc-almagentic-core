@@ -1,0 +1,27 @@
+{
+ "id": "funcionalidad",
+ "descripcion": "Petición normal de algo nuevo",
+ "issue": {
+  "number": 50,
+  "title": "[Petición] Filtrar productos por precio máximo",
+  "body": "### ¿Qué tipo de petición es?\n\nAlgo nuevo\n\n### ¿Qué necesitas?\n\nPoder pedir a GET /api/v1/productos solo los productos con precio menor o igual a un importe.\n\n### ¿Para quién es?\n\nLa tienda web\n\n### ¿Qué se gana si se hace?\n\nLos clientes encuentran antes lo que pueden pagar.\n\n### ¿Cómo sabremos que está hecho? (opcional)\n\n- Con precio_max=10 solo salen productos de 10 € o menos.\n\n### Urgencia\n\nEste mes"
+ },
+ "abiertos": [
+  {
+   "number": 40,
+   "title": "[Petición] Buscar productos por nombre"
+  },
+  {
+   "number": 41,
+   "title": "[Petición] Exportar el catálogo a CSV"
+  }
+ ],
+ "esperado": {
+  "tipo": [
+   "funcionalidad",
+   "mejora"
+  ],
+  "sospecha_inyeccion": false,
+  "min_preguntas": 1
+ }
+}

@@ -1,0 +1,18 @@
+# Mantenimiento de dependencias (tarea C). Las acciones van fijadas por SHA con la versión
+# en un comentario; Dependabot actualiza los dos. Una persona revisa y fusiona.
+# Prefijo `deps`: release.py lo cuenta como parche y, al fusionar, core publica vX.Y.Z y mueve v1.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: Europe/Madrid
+    commit-message:
+      prefix: deps
+    groups:
+      acciones:
+        patterns: ["*"]
+        update-types: [minor, patch]

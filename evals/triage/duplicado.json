@@ -1,0 +1,23 @@
+{
+ "id": "duplicado",
+ "descripcion": "Petición repetida de un issue abierto",
+ "issue": {
+  "number": 54,
+  "title": "[Petición] Búsqueda de productos por su nombre",
+  "body": "### ¿Qué tipo de petición es?\n\nAlgo nuevo\n\n### ¿Qué necesitas?\n\nNecesito poder buscar productos escribiendo parte del nombre en la API.\n\n### ¿Para quién es?\n\nLa tienda web\n\n### ¿Qué se gana si se hace?\n\nEncontrar productos sin recorrer el catálogo entero.\n\n### ¿Cómo sabremos que está hecho? (opcional)\n\n_No response_\n\n### Urgencia\n\nEste mes"
+ },
+ "abiertos": [
+  {
+   "number": 40,
+   "title": "[Petición] Buscar productos por nombre"
+  },
+  {
+   "number": 41,
+   "title": "[Petición] Exportar el catálogo a CSV"
+  }
+ ],
+ "esperado": {
+  "referencia": 40,
+  "sospecha_inyeccion": false
+ }
+}
