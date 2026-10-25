@@ -1436,25 +1436,131 @@ const TASKS = [
   "id": "C",
   "title": "Mantenimiento continuo",
   "phase": "Operación",
-  "status": "next",
-  "desc": "Actualización de dependencias y evals del harness al cambiar de modelo.",
+  "status": "done",
+  "desc": "Dependabot propone cada semana actualizaciones de paquetes, imágenes base y acciones en los tres repos; pasan los mismos checks y las aprueba una persona. Si hace falta un cambio que Dependabot no sabe hacer, se pide con @claude en su PR. Unas evals con casos fijos comparan modelos para el triage y el revisor antes de cambiarlos.",
   "alm": [
    "11",
    "12"
   ],
-  "prereqs": [],
+  "prereqs": [
+   [
+    "Dependabot alerts y security updates activados en app, core y gitops",
+    true
+   ]
+  ],
   "subs": [
    [
-    "Dependabot en app",
+    "Dependabot en core (acciones por SHA) y evals: 13 casos, run_evals.py (8 tests) y reusable-evals.yml",
     "claude",
-    false,
+    true,
+    [
+     {
+      "label": "core#30",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/30"
+     }
+    ]
+   ],
+   [
+    "Dependabot en app (uv, docker, acciones) y workflow evals",
+    "claude",
+    true,
+    [
+     {
+      "label": "app#32",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/32"
+     }
+    ]
+   ],
+   [
+    "Dependabot en gitops (imagen del puente y del exportador, acciones)",
+    "claude",
+    true,
+    [
+     {
+      "label": "gitops#13",
+      "href": "https://github.com/acbacb77/poc-almagentic-gitops/pull/13"
+     }
+    ]
+   ],
+   [
+    "Arreglo: entradas numéricas de workflow_dispatch",
+    "claude",
+    true,
+    [
+     {
+      "label": "app#35",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/35"
+     }
+    ]
+   ],
+   [
+    "Evals sonnet frente a haiku: 13/13 los dos; haiku 12 veces más barato y más ruidoso",
+    "usuario",
+    true,
     []
    ],
    [
-    "Evals del harness al cambiar de modelo",
+    "Triage con acciones por SHA y Claude Code fijado (sustituye cuatro saltos mayores de Dependabot)",
     "claude",
-    false,
-    []
+    true,
+    [
+     {
+      "label": "core#36",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/36"
+     }
+    ]
+   ],
+   [
+    "Fusionar las actualizaciones de Dependabot",
+    "usuario",
+    true,
+    [
+     {
+      "label": "core#31",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/31"
+     },
+     {
+      "label": "app#33",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/33"
+     },
+     {
+      "label": "gitops#14",
+      "href": "https://github.com/acbacb77/poc-almagentic-gitops/pull/14"
+     }
+    ]
+   ],
+   [
+    "@claude en el PR de Dependabot: httpx → httpx2",
+    "agente",
+    true,
+    [
+     {
+      "label": "app#34",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/34"
+     }
+    ]
+   ],
+   [
+    "Arreglo: setup-uv 10.3.2 descartaba el cambio del agente",
+    "claude",
+    true,
+    [
+     {
+      "label": "core#37",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/37"
+     }
+    ]
+   ],
+   [
+    "Desplegar en staging (promociones intermedias cerradas)",
+    "usuario",
+    true,
+    [
+     {
+      "label": "gitops#18",
+      "href": "https://github.com/acbacb77/poc-almagentic-gitops/pull/18"
+     }
+    ]
    ]
   ]
  },
@@ -1462,7 +1568,7 @@ const TASKS = [
   "id": "D",
   "title": "Retirada de un endpoint v1",
   "phase": "Retirada",
-  "status": "todo",
+  "status": "next",
   "desc": "v2 del catálogo con importe y moneda; deprecación, migración y retirada de v1.",
   "alm": [
    "11",

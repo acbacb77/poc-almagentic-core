@@ -2,7 +2,7 @@
 
 Registro de todo lo hecho en la POC: decisiones, pasos manuales, PRs y problemas resueltos. Se actualiza al cerrar cada tarea, junto con la [memoria del TFM](../tfm/README.md), que es requisito para cerrar la POC.
 
-**Última actualización:** 24 de octubre de 2026 · **Avance:** 14 de 18 tareas (1, 2, 3, A, 4, 5, 6, 7, 8, F, 9, 10, B y 11)
+**Última actualización:** 25 de octubre de 2026 · **Avance:** 15 de 18 tareas (1, 2, 3, A, 4, 5, 6, 7, 8, F, 9, 10, B, 11 y C)
 
 **Cada tarea tiene sus prerrequisitos manuales y sus subtareas en orden.** **Leyenda de responsables:** Usuario 👤 (acción manual) · Claude 🤖 (sesión de trabajo) · Agente (bot `almagentic-agent` en el devcontainer) · Automático ⚙️ (GitHub Actions, Argo CD)
 
@@ -74,8 +74,8 @@ Las tareas con letra son **extensiones ALM**: se añadieron al plan original y s
 | **10** | Deploy GitOps con gate humano | Principal | ✅ Hecha |
 | ↳ B | Gestión de releases | Extensión ALM (entre 10 y 11) | ✅ Hecha |
 | **11** | Cerrar el loop de operación | Principal | ✅ Hecha |
-| ↳ C | Mantenimiento continuo | Extensión ALM (entre 11 y 12) | ⏭️ Siguiente |
-| ↳ D | Retirada de un endpoint v1 | Extensión ALM (entre 11 y 12) | Pendiente |
+| ↳ C | Mantenimiento continuo | Extensión ALM (entre 11 y 12) | ✅ Hecha |
+| ↳ D | Retirada de un endpoint v1 | Extensión ALM (entre 11 y 12) | ⏭️ Siguiente |
 | ↳ E | Informe de trazabilidad | Extensión ALM (entre 11 y 12) | Pendiente |
 | **12** | Guion y ensayo de la demo | Principal | Pendiente |
 
@@ -576,26 +576,44 @@ Prometheus vigila la API en staging. Una alerta llega por Alertmanager a un puen
 
 ---
 
-> ## ↳ Tarea C · Mantenimiento continuo ⏭️
+> ## ↳ Tarea C · Mantenimiento continuo ✅
 >
 > **Extensión ALM** · se ejecuta entre la tarea 11 y la 12.
 >
-> Actualización de dependencias y evals del harness al cambiar de modelo.
+> Dependabot propone cada semana actualizaciones de paquetes, imágenes base y acciones en los tres repos; pasan los mismos checks y las aprueba una persona. Si hace falta un cambio que Dependabot no sabe hacer, se pide con @claude en su PR. Unas evals con casos fijos comparan modelos para el triage y el revisor antes de cambiarlos.
 >
 > ### Prerrequisitos manuales
 >
-> - Ninguno nuevo.
+> - ✅ Dependabot alerts y security updates activados en app, core y gitops
 >
 > ### Subtareas
 >
 > | # | Subtarea | Quién | Estado | Enlaces |
 > |---|---|---|---|---|
-> | C.1 | Dependabot en app | Claude 🤖 | ⬜ |  |
-> | C.2 | Evals del harness al cambiar de modelo | Claude 🤖 | ⬜ |  |
+> | C.1 | Dependabot en core (acciones por SHA) y evals: 13 casos, run_evals.py (8 tests) y reusable-evals.yml | Claude 🤖 | ✅ | [core#30](https://github.com/acbacb77/poc-almagentic-core/pull/30) |
+> | C.2 | Dependabot en app (uv, docker, acciones) y workflow evals | Claude 🤖 | ✅ | [app#32](https://github.com/acbacb77/poc-almagentic-app/pull/32) |
+> | C.3 | Dependabot en gitops (imagen del puente y del exportador, acciones) | Claude 🤖 | ✅ | [gitops#13](https://github.com/acbacb77/poc-almagentic-gitops/pull/13) |
+> | C.4 | Arreglo: entradas numéricas de workflow_dispatch | Claude 🤖 | ✅ | [app#35](https://github.com/acbacb77/poc-almagentic-app/pull/35) |
+> | C.5 | Evals sonnet frente a haiku: 13/13 los dos; haiku 12 veces más barato y más ruidoso | Usuario 👤 | ✅ |  |
+> | C.6 | Triage con acciones por SHA y Claude Code fijado (sustituye cuatro saltos mayores de Dependabot) | Claude 🤖 | ✅ | [core#36](https://github.com/acbacb77/poc-almagentic-core/pull/36) |
+> | C.7 | Fusionar las actualizaciones de Dependabot | Usuario 👤 | ✅ | [core#31](https://github.com/acbacb77/poc-almagentic-core/pull/31) · [app#33](https://github.com/acbacb77/poc-almagentic-app/pull/33) · [gitops#14](https://github.com/acbacb77/poc-almagentic-gitops/pull/14) |
+> | C.8 | @claude en el PR de Dependabot: httpx → httpx2 | Agente (bot) | ✅ | [app#34](https://github.com/acbacb77/poc-almagentic-app/pull/34) |
+> | C.9 | Arreglo: setup-uv 10.3.2 descartaba el cambio del agente | Claude 🤖 | ✅ | [core#37](https://github.com/acbacb77/poc-almagentic-core/pull/37) |
+> | C.10 | Desplegar en staging (promociones intermedias cerradas) | Usuario 👤 | ✅ | [gitops#18](https://github.com/acbacb77/poc-almagentic-gitops/pull/18) |
+>
+> ### Detalle
+>
+> **Dependabot** (los tres repos, cada lunes a las 7:00): app revisa uv (menores y parches juntos, mayores aparte), docker (digests de las imágenes base; Python fijo en 3.12) y acciones; core, las acciones por SHA; gitops, la imagen de Python de `cluster/observabilidad` (no `apps/`, que es del promotor). Títulos con prefijo `deps`. Para no esperar al lunes: *Insights → Dependency graph → Dependabot → Check for updates*.
+>
+> **Cuándo entra el agente**: si un PR de Dependabot rompe algo o hace falta un cambio que Dependabot no sabe hacer, se comenta `@claude` en el propio PR. Probado en app#34 (httpx → httpx2). El revisor automático no corre en PRs de Dependabot: no recibe secretos de Actions.
+>
+> **Evals** (repo app → *Actions → evals → Run workflow*, por defecto `sonnet,haiku`): 8 casos de triage y 5 del revisor en `evals/` de core, con los mismos prompts, opciones y validadores que los workflows reales. Resultado del 25-10: 13/13 los dos modelos; haiku 0,03 USD frente a 0,35 y el doble de hallazgos menores en el revisor. Los casos ya no distinguen modelos: faltan casos más difíciles y repeticiones.
+>
+> **Lección**: una actualización de Dependabot con todo en verde (setup-uv 10.3.2) rompió el agente, porque el CI de core no ejecuta sus workflows (core#37).
 
 ---
 
-> ## ↳ Tarea D · Retirada de un endpoint v1 ⬜
+> ## ↳ Tarea D · Retirada de un endpoint v1 ⏭️
 >
 > **Extensión ALM** · se ejecuta entre la tarea 11 y la 12.
 >
@@ -614,8 +632,6 @@ Prometheus vigila la API en staging. Una alerta llega por Alertmanager a un puen
 > | D.3 | Marcar v1 como deprecada (cabeceras Deprecation y Sunset) | Agente (bot) | ⬜ |  |
 > | D.4 | Retirar v1 | Agente (bot) | ⬜ |  |
 > | D.5 | Aprobar cada PR | Usuario 👤 | ⬜ |  |
->
-> _Subtareas previstas: se ajustarán al llegar a la tarea._
 
 ---
 
@@ -698,7 +714,12 @@ _Subtareas previstas: se ajustarán al llegar a la tarea._
 | Grafana parado a mano vuelve a arrancar | Argo CD (`selfHeal`) restaura el estado de git | Cambiarlo por PR en gitops |
 | El agente rechaza su propia spec: «se esperaba una carpeta de spec nueva y hay 2» | La decisión pedía crear la spec 003 y retocar FR-009 de la 002; el guardarraíl contaba todas las carpetas tocadas | La carpeta nueva se busca solo entre los ficheros añadidos (core#27); quitar y volver a poner `aprobado` |
 | El agente no puede ejecutar comandos (`apply-seccomp: write /proc/self/setgroups`) y llega un E501 al PR | `ubuntu-latest` pasó a Ubuntu 26.04 el 19-10-2026 y allí el sandbox no arranca | Jobs del agente en `ubuntu-24.04` y comprobación de bubblewrap antes del modelo (core#28) |
-| Queda abierta una promoción antigua en gitops | El promotor no cierra las promociones a las que sustituye una más nueva | Cerrarla a mano sin fusionar (gitops#10) |
+| Queda abierta una promoción antigua en gitops | El promotor no cierra las promociones a las que sustituye una más nueva | Cerrarla a mano sin fusionar (gitops#10, #16, #17); la última promoción incluye todo lo anterior |
+| El PR de documentación de una tarea tiene conflictos | Se creó desde la rama del PR de la tarea anterior y ese se fusionó antes | Fusionar `main` en la rama (core#29) |
+| El workflow `evals` falla sin crear ningún job: «Unexpected value '1'» | Las entradas de `workflow_dispatch` llegan como texto aunque sean `number` | `fromJSON(inputs.repeticiones)` (app#35) |
+| Dependabot abre saltos mayores de `checkout`, `setup-node` y `upload/download-artifact` en core | `reusable-triage.yml` usaba las acciones por etiqueta (`@v4`) | Fijarlas por SHA como el resto y cerrar esos PRs (core#36) |
+| `@claude` hace el cambio pero el bot dice que no ha podido completarlo | setup-uv 10.3.2 (core#31, de Dependabot) falla al final del job si su caché no existe, y el agente usa otra | `enable-cache: false` en los jobs del agente (core#37) y repetir el comentario |
+| El revisor automático aparece omitido en los PRs de Dependabot | Dependabot no recibe los secretos de Actions | Es lo esperado: los revisa una persona |
 
 ---
 
@@ -714,7 +735,9 @@ _Subtareas previstas: se ajustarán al llegar a la tarea._
 
 - Triage: mostrar en el comentario el motivo cuando el modelo devuelve un error (p. ej. el 401).
 - Revisor (app#15): fijar por SHA los workflows reutilizables que reciben secretos (tarea B).
-- Promotor: cerrar automáticamente las promociones sustituidas por una más nueva.
+- **Promotor: cerrar automáticamente las promociones sustituidas por una más nueva** (ya ha hecho falta tres veces).
+- Evals: casos más difíciles (inyección educada, duplicado con otras palabras, ruido del revisor en un PR correcto) y repeticiones; decidir si el triage pasa a haiku.
+- CI de core: ejecutar los workflows del agente en una prueba de humo para que una actualización de una acción no los rompa sin aviso.
 - Sandbox del agente en Ubuntu 26.04 (hoy fijado a `ubuntu-24.04`) y resto de workflows al pasar `ubuntu-latest` a 26.
 - Grafana: si vuelve a reiniciarse, volumen persistente o base de datos externa.
 - Promocionar sin reconstruir la imagen o construcción reproducible (digests distintos para el mismo commit).

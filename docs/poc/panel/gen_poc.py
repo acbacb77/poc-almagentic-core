@@ -178,12 +178,20 @@ TASKS = [
                ("Promoción del arreglo a staging", "usuario", True, [pr("gitops", 11)]),
                ("Grafana estable: SQLite en WAL y liveness con margen", "claude", True, [pr("gitops", 9)]),
                ("Texto de la alerta con el nuevo máximo", "claude", True, [pr("gitops", 12)])]),
-    dict(id="C", title="Mantenimiento continuo", phase="Operación", status="next",
-         desc="Actualización de dependencias y evals del harness al cambiar de modelo.",
-         prereqs=[],
-         subs=[("Dependabot en app", "claude", False, []),
-               ("Evals del harness al cambiar de modelo", "claude", False, [])]),
-    dict(id="D", title="Retirada de un endpoint v1", phase="Retirada", status="todo",
+    dict(id="C", title="Mantenimiento continuo", phase="Operación", status="done",
+         desc="Dependabot propone cada semana actualizaciones de paquetes, imágenes base y acciones en los tres repos; pasan los mismos checks y las aprueba una persona. Si hace falta un cambio que Dependabot no sabe hacer, se pide con @claude en su PR. Unas evals con casos fijos comparan modelos para el triage y el revisor antes de cambiarlos.",
+         prereqs=[("Dependabot alerts y security updates activados en app, core y gitops", True)],
+         subs=[("Dependabot en core (acciones por SHA) y evals: 13 casos, run_evals.py (8 tests) y reusable-evals.yml", "claude", True, [pr("core", 30)]),
+               ("Dependabot en app (uv, docker, acciones) y workflow evals", "claude", True, [pr("app", 32)]),
+               ("Dependabot en gitops (imagen del puente y del exportador, acciones)", "claude", True, [pr("gitops", 13)]),
+               ("Arreglo: entradas numéricas de workflow_dispatch", "claude", True, [pr("app", 35)]),
+               ("Evals sonnet frente a haiku: 13/13 los dos; haiku 12 veces más barato y más ruidoso", "usuario", True, []),
+               ("Triage con acciones por SHA y Claude Code fijado (sustituye cuatro saltos mayores de Dependabot)", "claude", True, [pr("core", 36)]),
+               ("Fusionar las actualizaciones de Dependabot", "usuario", True, [pr("core", 31), pr("app", 33), pr("gitops", 14)]),
+               ("@claude en el PR de Dependabot: httpx → httpx2", "agente", True, [pr("app", 34)]),
+               ("Arreglo: setup-uv 10.3.2 descartaba el cambio del agente", "claude", True, [pr("core", 37)]),
+               ("Desplegar en staging (promociones intermedias cerradas)", "usuario", True, [pr("gitops", 18)])]),
+    dict(id="D", title="Retirada de un endpoint v1", phase="Retirada", status="next",
          desc="v2 del catálogo con importe y moneda; deprecación, migración y retirada de v1.",
          prereqs=[],
          subs=[("Abrir la petición de la v2", "usuario", False, []),
@@ -321,6 +329,13 @@ DETAILS = {
 **Versiones de la app** (repo `poc-almagentic-app`): *Actions → release → Run workflow* sobre `main`, después de que `supply-chain` termine para ese commit. Si falla con «Nada que publicar», desde la última versión solo hubo documentación o pruebas; con «Imagen no publicada», espera a `supply-chain`.
 
 **Primera versión**: `v1.0.0` = `ghcr.io/acbacb77/poc-almagentic-app@sha256:8ace64ae…` (commit `3898e7c`), desplegada con gitops#6.""",
+    "C": """**Dependabot** (los tres repos, cada lunes a las 7:00): app revisa uv (menores y parches juntos, mayores aparte), docker (digests de las imágenes base; Python fijo en 3.12) y acciones; core, las acciones por SHA; gitops, la imagen de Python de `cluster/observabilidad` (no `apps/`, que es del promotor). Títulos con prefijo `deps`. Para no esperar al lunes: *Insights → Dependency graph → Dependabot → Check for updates*.
+
+**Cuándo entra el agente**: si un PR de Dependabot rompe algo o hace falta un cambio que Dependabot no sabe hacer, se comenta `@claude` en el propio PR. Probado en app#34 (httpx → httpx2). El revisor automático no corre en PRs de Dependabot: no recibe secretos de Actions.
+
+**Evals** (repo app → *Actions → evals → Run workflow*, por defecto `sonnet,haiku`): 8 casos de triage y 5 del revisor en `evals/` de core, con los mismos prompts, opciones y validadores que los workflows reales. Resultado del 25-10: 13/13 los dos modelos; haiku 0,03 USD frente a 0,35 y el doble de hallazgos menores en el revisor. Los casos ya no distinguen modelos: faltan casos más difíciles y repeticiones.
+
+**Lección**: una actualización de Dependabot con todo en verde (setup-uv 10.3.2) rompió el agente, porque el CI de core no ejecuta sus workflows (core#37).""",
     "11": """**Secretos** (en WSL, una vez, nunca en git): `observabilidad-github` con un token personal de grano fino creado en *Settings de tu cuenta → Developer settings → Fine-grained tokens* (solo `poc-almagentic-app`; Issues lectura y escritura, Actions lectura; 90 días) y `grafana-admin`. Comandos en el [README de gitops](https://github.com/acbacb77/poc-almagentic-gitops#observabilidad-tarea-11).
 
 **Direcciones**: Grafana `localhost:3000` (paneles «API del catálogo» y «Actividad de los agentes»), Prometheus `localhost:9090`. Las métricas de la API van por el puerto 9000 del pod, que el `Service` no publica.
