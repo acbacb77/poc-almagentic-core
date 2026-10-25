@@ -99,6 +99,10 @@ jobs:
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           python-version: "3.12"
+          # La caché de uv del agente vive en app/.uv-cache (UV_CACHE_DIR), no en la de
+          # setup-uv. Desde v10.3.2 el paso posterior falla si su caché no existe, y eso
+          # marcaba el job como fallido y descartaba el cambio del agente (app#34).
+          enable-cache: false
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
