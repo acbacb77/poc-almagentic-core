@@ -290,6 +290,7 @@ def ejecutar(args: argparse.Namespace) -> list[Resultado]:
                         base,
                         head,
                         caso["pr"],
+                        caso.get("comentarios", []),
                     )
                 vacio = tmp / "vacio"
                 vacio.mkdir()
