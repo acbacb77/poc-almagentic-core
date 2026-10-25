@@ -171,6 +171,12 @@ def plan(log: str, last: str, initial: str, repo: str, date: str = "") -> dict:
         "bump": bump,
         "version": version,
         "notes": notes(changes, version, repo, date, last),
+        # Para el informe de trazabilidad (tarea E): todos los PRs de la versión.
+        "cambios": [
+            {"pr": int(c.pr), "tipo": c.type, "descripcion": c.desc, "agente": c.agent}
+            for c in changes
+            if c.pr
+        ],
     }
 
 
