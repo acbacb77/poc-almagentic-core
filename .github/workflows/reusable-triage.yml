@@ -57,7 +57,7 @@ jobs:
           gh issue list --repo "$REPO" --state open --limit 100 --json number,title > open.json
           python3 core/scripts/triage/build_prompt.py core/prompts/triage.md issue.json open.json > prompt.md
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
 
