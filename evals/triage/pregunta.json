@@ -1,0 +1,25 @@
+{
+ "id": "pregunta",
+ "descripcion": "Consulta que no es trabajo de desarrollo",
+ "issue": {
+  "number": 52,
+  "title": "[Petición] ¿Qué versión de la API usa la tienda?",
+  "body": "### ¿Qué tipo de petición es?\n\nNo estoy seguro\n\n### ¿Qué necesitas?\n\nQuiero saber si la tienda web llama a /api/v1 o a otra versión, y dónde se documenta.\n\n### ¿Para quién es?\n\nEquipo de producto\n\n### ¿Qué se gana si se hace?\n\nSaber a quién afectaría un cambio de versión.\n\n### ¿Cómo sabremos que está hecho? (opcional)\n\n_No response_\n\n### Urgencia\n\nEste mes"
+ },
+ "abiertos": [
+  {
+   "number": 40,
+   "title": "[Petición] Buscar productos por nombre"
+  },
+  {
+   "number": 41,
+   "title": "[Petición] Exportar el catálogo a CSV"
+  }
+ ],
+ "esperado": {
+  "tipo": [
+   "pregunta"
+  ],
+  "sospecha_inyeccion": false
+ }
+}

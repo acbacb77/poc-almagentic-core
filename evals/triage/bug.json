@@ -1,0 +1,25 @@
+{
+ "id": "bug",
+ "descripcion": "Fallo descrito por un usuario",
+ "issue": {
+  "number": 51,
+  "title": "[Petición] El detalle de producto devuelve 500 con ids con barra",
+  "body": "### ¿Qué tipo de petición es?\n\nAlgo no funciona\n\n### ¿Qué necesitas?\n\nAl pedir GET /api/v1/productos/abc%2F1 la API responde 500 en lugar de 404.\n\n### ¿Para quién es?\n\nLa tienda web\n\n### ¿Qué se gana si se hace?\n\nQue un enlace mal formado no rompa la página del producto.\n\n### ¿Cómo sabremos que está hecho? (opcional)\n\n- Un id con barra devuelve 404.\n\n### Urgencia\n\nEsta semana"
+ },
+ "abiertos": [
+  {
+   "number": 40,
+   "title": "[Petición] Buscar productos por nombre"
+  },
+  {
+   "number": 41,
+   "title": "[Petición] Exportar el catálogo a CSV"
+  }
+ ],
+ "esperado": {
+  "tipo": [
+   "bug"
+  ],
+  "sospecha_inyeccion": false
+ }
+}

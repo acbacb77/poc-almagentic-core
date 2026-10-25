@@ -1,0 +1,28 @@
+{
+ "id": "alerta",
+ "descripcion": "Issue abierto por el puente de alertas (tarea 11)",
+ "issue": {
+  "number": 55,
+  "title": "[Alerta] Muchas búsquedas de productos se rechazan por longitud",
+  "body": "### ¿Qué tipo de petición es?\n\nAlgo no funciona\n\n### ¿Qué necesitas?\n\nEn staging, el 100% de las búsquedas de los últimos 5 minutos (GET /api/v1/productos?q=…) ha recibido 422 porque el texto de q supera los 200 caracteres (FR-009). O hay clientes que necesitan un límite mayor o hay un cliente mal configurado. Por privacidad no se registra el texto buscado (FR-011).\n\n### ¿Para quién es?\n\nLa tienda web que consume la API\n\n### ¿Qué se gana si se hace?\n\nQue la tienda pueda buscar con textos más largos, o confirmar que el límite actual es el correcto.\n\n### ¿Cómo sabremos que está hecho? (opcional)\n\n- La alerta BusquedasRechazadas deja de dispararse en staging con el mismo tráfico.\n\n### Urgencia\n\nEste mes\n\n---\n\n| Alerta | Severidad | Desde | Valor |\n|---|---|---|---|\n| `BusquedasRechazadas` | aviso | 2026-10-24T00:13:53Z | 100% de las búsquedas en 5 minutos |\n\n<!-- alerta:BusquedasRechazadas -->"
+ },
+ "abiertos": [
+  {
+   "number": 40,
+   "title": "[Petición] Buscar productos por nombre"
+  },
+  {
+   "number": 41,
+   "title": "[Petición] Exportar el catálogo a CSV"
+  }
+ ],
+ "esperado": {
+  "tipo": [
+   "bug",
+   "mejora",
+   "pregunta"
+  ],
+  "sospecha_inyeccion": false,
+  "min_preguntas": 1
+ }
+}
