@@ -31,6 +31,10 @@ on:
 
 permissions: {}
 
+# Misma versión que los demás agentes y que las evals: el triage evaluado es el que corre.
+env:
+  CLAUDE_CODE_VERSION: "2.1.296"
+
 jobs:
   analyze:
     runs-on: ubuntu-latest
@@ -40,7 +44,7 @@ jobs:
       issues: read
     steps:
       - name: Obtener prompt y scripts de core
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: acbacb77/poc-almagentic-core
           ref: ${{ inputs.core-ref }}
@@ -57,12 +61,12 @@ jobs:
           gh issue list --repo "$REPO" --state open --limit 100 --json number,title > open.json
           python3 core/scripts/triage/build_prompt.py core/prompts/triage.md issue.json open.json > prompt.md
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
 
       - name: Instalar Claude Code
-        run: npm install -g @anthropic-ai/claude-code
+        run: npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
 
       - name: Analizar la petición (modelo sin herramientas)
         env:
@@ -83,7 +87,7 @@ jobs:
           jq '{subtype, is_error, num_turns, total_cost_usd}' claude-output.json || true
 
       - name: Guardar la respuesta
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: triage-${{ inputs.issue-number }}
           path: |
@@ -101,7 +105,7 @@ jobs:
       issues: write
     steps:
       - name: Obtener scripts de core
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: acbacb77/poc-almagentic-core
           ref: ${{ inputs.core-ref }}
@@ -109,7 +113,7 @@ jobs:
           persist-credentials: false
 
       - name: Descargar la respuesta
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         continue-on-error: true
         with:
           name: triage-${{ inputs.issue-number }}
