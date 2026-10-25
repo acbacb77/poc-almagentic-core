@@ -3,7 +3,8 @@
 # Calcula la versión a partir de los Conventional Commits desde la última etiqueta y busca la
 # imagen que main ya publicó y firmó para ese commit. Si la verifica (procedencia desde main,
 # SBOM y firma de core), le añade la etiqueta vX.Y.Z sin reconstruirla (mismo digest, mismas
-# firmas), etiqueta el commit y publica la Release con las notas, el digest y si está en staging.
+# firmas), etiqueta el commit y publica la Release con las notas, el digest, si está en staging
+# y la trazabilidad de cada cambio (tarea E), también como trazabilidad.json adjunto.
 name: reusable-release
 
 on:
@@ -40,6 +41,10 @@ jobs:
     permissions:
       contents: write
       packages: write
+      # Solo lectura, para el informe de trazabilidad (tarea E).
+      pull-requests: read
+      issues: read
+      checks: read
     outputs:
       version: ${{ steps.plan.outputs.version }}
     steps:
@@ -113,6 +118,21 @@ jobs:
           docker buildx imagetools create -t "${IMAGE}:v${VERSION}" "${IMAGE}@${DIGEST}"
           test "$(docker buildx imagetools inspect "${IMAGE}:v${VERSION}" --format '{{json .Manifest}}' | jq -r .digest)" = "$DIGEST"
 
+      - name: Trazabilidad de cada cambio
+        # Si falla, la versión se publica igual y se avisa: el informe no debe bloquear una versión.
+        continue-on-error: true
+        id: traza
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          GITOPS: ${{ inputs.gitops-repo }}
+          VERSION: ${{ steps.plan.outputs.version }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          python3 .core/scripts/release/trazabilidad.py --plan "$RUNNER_TEMP/plan.json" --repo "$REPO" \
+            --gitops "$GITOPS" --version "$VERSION" --digest "$DIGEST" \
+            --md "$RUNNER_TEMP/trazabilidad.md" --json "$RUNNER_TEMP/trazabilidad.json"
+
       - name: Etiquetar el commit y publicar la Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -143,8 +163,16 @@ jobs:
             echo '```'
             echo "gh attestation verify oci://${IMAGE}@${DIGEST} --owner ${GITHUB_REPOSITORY_OWNER} --signer-workflow ${SIGNER_WORKFLOW}"
             echo '```'
+            echo
+            if [ -s "$RUNNER_TEMP/trazabilidad.md" ]; then
+              cat "$RUNNER_TEMP/trazabilidad.md"
+            else
+              echo "> El informe de trazabilidad no se pudo generar; ver la ejecución del workflow."
+            fi
           } > "$RUNNER_TEMP/release.md"
           gh api "repos/${REPO}/git/refs" -f "ref=refs/tags/${tag}" -f "sha=${GITHUB_SHA}" > /dev/null
-          gh release create "$tag" --repo "$REPO" --title "$tag" --notes-file "$RUNNER_TEMP/release.md" --verify-tag
+          adjuntos=()
+          [ -s "$RUNNER_TEMP/trazabilidad.json" ] && adjuntos+=("$RUNNER_TEMP/trazabilidad.json")
+          gh release create "$tag" --repo "$REPO" --title "$tag" --notes-file "$RUNNER_TEMP/release.md" --verify-tag "${adjuntos[@]}"
           echo "::notice title=Versión publicada::${tag} → ${IMAGE}@${DIGEST}"
           cat "$RUNNER_TEMP/release.md" >> "$GITHUB_STEP_SUMMARY"
