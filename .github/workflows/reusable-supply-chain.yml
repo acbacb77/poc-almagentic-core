@@ -106,7 +106,11 @@ jobs:
           curl -fsS localhost:8000/health
           echo
           test "$(docker exec app id -u)" != 0 || { echo "::error::La imagen corre como root"; exit 1; }
-          curl -fsS "localhost:8000/api/v1/productos?q=texto-secreto-de-prueba" > /dev/null
+          # Basta con que la petición llegue: el estado depende de la versión de la API (v1 retirada
+          # responde 410). Lo que se comprueba es que el texto de q no acaba en los logs.
+          for ruta in /api/v1/productos /api/v2/productos; do
+            curl -sS -o /dev/null "localhost:8000${ruta}?q=texto-secreto-de-prueba"
+          done
           sleep 1
           docker logs app > logs.txt 2>&1
           if grep -q "texto-secreto-de-prueba" logs.txt; then
