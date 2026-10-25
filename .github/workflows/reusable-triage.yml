@@ -40,7 +40,7 @@ jobs:
       issues: read
     steps:
       - name: Obtener prompt y scripts de core
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: acbacb77/poc-almagentic-core
           ref: ${{ inputs.core-ref }}
@@ -101,7 +101,7 @@ jobs:
       issues: write
     steps:
       - name: Obtener scripts de core
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: acbacb77/poc-almagentic-core
           ref: ${{ inputs.core-ref }}
