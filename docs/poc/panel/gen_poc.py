@@ -191,19 +191,27 @@ TASKS = [
                ("@claude en el PR de Dependabot: httpx → httpx2", "agente", True, [pr("app", 34)]),
                ("Arreglo: setup-uv 10.3.2 descartaba el cambio del agente", "claude", True, [pr("core", 37)]),
                ("Desplegar en staging (promociones intermedias cerradas)", "usuario", True, [pr("gitops", 18)])]),
-    dict(id="D", title="Retirada de un endpoint v1", phase="Retirada", status="next",
-         desc="v2 del catálogo con importe y moneda; deprecación, migración y retirada de v1.",
+    dict(id="D", title="Retirada de un endpoint v1", phase="Retirada", status="done",
+         desc="v2 del catálogo con precio {importe, moneda}; v1 avisa con Deprecation, Sunset y Link; se retira con 410 Gone cuando una persona lo decide con la fecha y el tráfico a la vista. La versión de la app pasa a 2.0.0.",
          prereqs=[],
-         subs=[("Abrir la petición de la v2", "usuario", False, []),
-               ("Implementar /api/v2 con importe y moneda", "agente", False, []),
-               ("Marcar v1 como deprecada (cabeceras Deprecation y Sunset)", "agente", False, []),
-               ("Retirar v1", "agente", False, []),
-               ("Aprobar cada PR", "usuario", False, [])]),
-    dict(id="E", title="Informe de trazabilidad", phase="Gobierno", status="todo",
-         desc="Cada release enlaza petición, spec, PR, escaneos, aprobaciones y despliegue.",
+         subs=[("Paneles de tráfico por versión (criterio de retirada)", "claude", True, [pr("gitops", 19)]),
+               ("Petición #36: v2 y v1 obsoleta; decisiones en un comentario", "usuario", True, [issue(36, "v2")]),
+               ("Spec 004 y código: v2, cabeceras de obsolescencia, moneda del catálogo", "agente", True, [pr("app", 37), pr("app", 38)]),
+               ("Desplegar (la promoción correcta, no la del merge de la spec)", "usuario", True, [pr("gitops", 21)]),
+               ("Petición #40: retirar v1 antes del Sunset (decisión registrada)", "usuario", True, [issue(40, "retirada")]),
+               ("Arreglo: la prueba de humo de core llamaba a /api/v1", "claude", True, [pr("core", 41)]),
+               ("Spec 005 y código: 410 Gone; tests de v2 adaptados con autorización", "agente", True, [pr("app", 41), pr("app", 42)]),
+               ("La retirada es incompatible: docs! y feat! en el agente", "claude", True, [pr("app", 43), pr("core", 42)]),
+               ("Versión 2.0.0 con trazabilidad", "usuario", True, []),
+               ("El revisor tiene en cuenta las decisiones del PR", "claude", False, [pr("core", 43)])]),
+    dict(id="E", title="Trazabilidad y cuadro de mando del proceso", phase="Gobierno", status="next",
+         desc="Cada release enlaza petición, decisión, spec, PRs, revisiones, checks y despliegue. Un cuadro de mando muestra en qué fase está cada petición, qué espera a una persona y qué ha fallado.",
          prereqs=[],
-         subs=[("Generador del informe por release", "claude", False, []),
-               ("Revisar el informe", "usuario", False, [])]),
+         subs=[("Trazabilidad en cada Release (trazabilidad.py y trazabilidad.json)", "claude", True, [pr("core", 39), pr("app", 39)]),
+               ("Colector del proceso, panel «Proceso ALM» y alertas del proceso en Grafana", "claude", True, [pr("gitops", 22)]),
+               ("Panel «Flujo ALM» (artifact) y su generador", "claude", True, [pr("core", 40)]),
+               ("Primera Release con trazabilidad: v2.0.0", "usuario", True, []),
+               ("Decidir cómo se refresca Flujo ALM y cerrar la tarea", "usuario", False, [])]),
     dict(id="12", title="Guion y ensayo de la demo", phase="Gobierno", status="todo",
          desc="Narrativa, métricas, plan B grabado y cierre de la memoria del TFM (requisito para finalizar la POC).",
          prereqs=[],
@@ -329,6 +337,11 @@ DETAILS = {
 **Versiones de la app** (repo `poc-almagentic-app`): *Actions → release → Run workflow* sobre `main`, después de que `supply-chain` termine para ese commit. Si falla con «Nada que publicar», desde la última versión solo hubo documentación o pruebas; con «Imagen no publicada», espera a `supply-chain`.
 
 **Primera versión**: `v1.0.0` = `ghcr.io/acbacb77/poc-almagentic-app@sha256:8ace64ae…` (commit `3898e7c`), desplegada con gitops#6.""",
+    "D": """**Decisiones**: precio v2 `{"importe": "12.50", "moneda": "EUR"}` (texto decimal e ISO 4217; la moneda es del catálogo); criterio de retirada fecha de Sunset + sin tráfico a v1 (paneles «Consultas por versión» y «Consultas a v1 en 24 h»); v1 retirada responde 410 Gone con `Link` a v2. El responsable adelantó la retirada al 25-10 (Sunset anunciado: 28-10): queda escrito en la petición #40.
+
+**Qué pasó por el camino**: el revisor marcó dos veces como incumplimiento cambios que el responsable había autorizado en el PR (no leía los comentarios: core#43). La spec 005 se contradecía (sustituir los tests de v1 y no tocar los de v2, que comparaban con v1): el agente paró y lo explicó, y una persona lo autorizó con `@claude`. La prueba de humo de core tenía `/api/v1` escrito a fuego (core#41). Y la retirada salió como `feat:`, que habría dado 1.1.0: con `docs!:` (app#43) salió la 2.0.0, y el agente ya marca así las retiradas (core#42).
+
+**Pendiente**: el log de acceso de uvicorn aún registra la ruta recibida en `/api/v1/…` y `/api/v1` sin barra puede dar 307; va en una petición nueva.""",
     "C": """**Dependabot** (los tres repos, cada lunes a las 7:00): app revisa uv (menores y parches juntos, mayores aparte), docker (digests de las imágenes base; Python fijo en 3.12) y acciones; core, las acciones por SHA; gitops, la imagen de Python de `cluster/observabilidad` (no `apps/`, que es del promotor). Títulos con prefijo `deps`. Para no esperar al lunes: *Insights → Dependency graph → Dependabot → Check for updates*.
 
 **Cuándo entra el agente**: si un PR de Dependabot rompe algo o hace falta un cambio que Dependabot no sabe hacer, se comenta `@claude` en el propio PR. Probado en app#34 (httpx → httpx2). El revisor automático no corre en PRs de Dependabot: no recibe secretos de Actions.

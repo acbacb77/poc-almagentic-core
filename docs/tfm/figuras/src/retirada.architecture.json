@@ -1,0 +1,277 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Retirada de una versión de la API",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "external": {
+          "label": "Persona o entrada"
+        },
+        "backend": {
+          "label": "Agente o proceso"
+        },
+        "security": {
+          "label": "Control o aprobación"
+        },
+        "frontend": {
+          "label": "Contrato de la API"
+        },
+        "cloud": {
+          "label": "Clúster"
+        }
+      }
+    }
+  },
+  "components": [
+    {
+      "id": "v1",
+      "type": "frontend",
+      "label": "API v1",
+      "sublabel": "publicada",
+      "pos": [
+        40,
+        50
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "pet1",
+      "type": "external",
+      "label": "Petición #36",
+      "sublabel": "v2 y v1 obsoleta",
+      "pos": [
+        270,
+        50
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "agente1",
+      "type": "backend",
+      "label": "Agente",
+      "sublabel": "spec 004 y código",
+      "pos": [
+        500,
+        50
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "v2",
+      "type": "frontend",
+      "label": "API v2",
+      "sublabel": "importe y moneda",
+      "pos": [
+        730,
+        50
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "avisos",
+      "type": "frontend",
+      "label": "v1 obsoleta",
+      "sublabel": "Deprecation, Sunset, Link",
+      "pos": [
+        960,
+        50
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "trafico",
+      "type": "cloud",
+      "label": "Prometheus",
+      "sublabel": "tráfico por versión",
+      "pos": [
+        960,
+        190
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "criterio",
+      "type": "security",
+      "label": "Criterio de retirada",
+      "sublabel": "fecha y sin tráfico",
+      "pos": [
+        730,
+        190
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "pet2",
+      "type": "external",
+      "label": "Petición #40",
+      "sublabel": "retirar v1",
+      "pos": [
+        500,
+        190
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "agente2",
+      "type": "backend",
+      "label": "Agente",
+      "sublabel": "spec 005 y código",
+      "pos": [
+        270,
+        190
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "gone",
+      "type": "frontend",
+      "label": "v1 retirada",
+      "sublabel": "410 Gone y Link a v2",
+      "pos": [
+        40,
+        190
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "version",
+      "type": "security",
+      "label": "Versión 2.0.0",
+      "sublabel": "cambio incompatible",
+      "pos": [
+        40,
+        330
+      ],
+      "size": [
+        150,
+        56
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Convivencia",
+      "wraps": [
+        "v1",
+        "pet1",
+        "agente1",
+        "v2",
+        "avisos"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Retirada",
+      "wraps": [
+        "trafico",
+        "criterio",
+        "pet2",
+        "agente2",
+        "gone"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "e1",
+      "from": "v1",
+      "to": "pet1"
+    },
+    {
+      "id": "e2",
+      "from": "pet1",
+      "to": "agente1",
+      "label": "aprobado"
+    },
+    {
+      "id": "e3",
+      "from": "agente1",
+      "to": "v2"
+    },
+    {
+      "id": "e4",
+      "from": "v2",
+      "to": "avisos"
+    },
+    {
+      "id": "e5",
+      "from": "avisos",
+      "to": "trafico",
+      "label": "clientes migran",
+      "labelAt": [
+        1105,
+        148
+      ]
+    },
+    {
+      "id": "e6",
+      "from": "trafico",
+      "to": "criterio"
+    },
+    {
+      "id": "e7",
+      "from": "criterio",
+      "to": "pet2",
+      "label": "decisión",
+      "labelAt": [
+        690,
+        186
+      ]
+    },
+    {
+      "id": "e8",
+      "from": "pet2",
+      "to": "agente2",
+      "label": "aprobado"
+    },
+    {
+      "id": "e9",
+      "from": "agente2",
+      "to": "gone"
+    },
+    {
+      "id": "e10",
+      "from": "gone",
+      "to": "version",
+      "label": "feat! y docs!",
+      "labelAt": [
+        175,
+        288
+      ]
+    }
+  ]
+}

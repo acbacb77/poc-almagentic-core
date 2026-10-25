@@ -1568,8 +1568,8 @@ const TASKS = [
   "id": "D",
   "title": "Retirada de un endpoint v1",
   "phase": "Retirada",
-  "status": "next",
-  "desc": "v2 del catálogo con importe y moneda; deprecación, migración y retirada de v1.",
+  "status": "done",
+  "desc": "v2 del catálogo con precio {importe, moneda}; v1 avisa con Deprecation, Sunset y Link; se retira con 410 Gone cuando una persona lo decide con la fecha y el tráfico a la vista. La versión de la app pasa a 2.0.0.",
   "alm": [
    "11",
    "12"
@@ -1577,43 +1577,130 @@ const TASKS = [
   "prereqs": [],
   "subs": [
    [
-    "Abrir la petición de la v2",
+    "Paneles de tráfico por versión (criterio de retirada)",
+    "claude",
+    true,
+    [
+     {
+      "label": "gitops#19",
+      "href": "https://github.com/acbacb77/poc-almagentic-gitops/pull/19"
+     }
+    ]
+   ],
+   [
+    "Petición #36: v2 y v1 obsoleta; decisiones en un comentario",
     "usuario",
-    false,
-    []
+    true,
+    [
+     {
+      "label": "#36 v2",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/issues/36"
+     }
+    ]
    ],
    [
-    "Implementar /api/v2 con importe y moneda",
+    "Spec 004 y código: v2, cabeceras de obsolescencia, moneda del catálogo",
     "agente",
-    false,
-    []
+    true,
+    [
+     {
+      "label": "app#37",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/37"
+     },
+     {
+      "label": "app#38",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/38"
+     }
+    ]
    ],
    [
-    "Marcar v1 como deprecada (cabeceras Deprecation y Sunset)",
-    "agente",
-    false,
-    []
-   ],
-   [
-    "Retirar v1",
-    "agente",
-    false,
-    []
-   ],
-   [
-    "Aprobar cada PR",
+    "Desplegar (la promoción correcta, no la del merge de la spec)",
     "usuario",
-    false,
+    true,
+    [
+     {
+      "label": "gitops#21",
+      "href": "https://github.com/acbacb77/poc-almagentic-gitops/pull/21"
+     }
+    ]
+   ],
+   [
+    "Petición #40: retirar v1 antes del Sunset (decisión registrada)",
+    "usuario",
+    true,
+    [
+     {
+      "label": "#40 retirada",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/issues/40"
+     }
+    ]
+   ],
+   [
+    "Arreglo: la prueba de humo de core llamaba a /api/v1",
+    "claude",
+    true,
+    [
+     {
+      "label": "core#41",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/41"
+     }
+    ]
+   ],
+   [
+    "Spec 005 y código: 410 Gone; tests de v2 adaptados con autorización",
+    "agente",
+    true,
+    [
+     {
+      "label": "app#41",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/41"
+     },
+     {
+      "label": "app#42",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/42"
+     }
+    ]
+   ],
+   [
+    "La retirada es incompatible: docs! y feat! en el agente",
+    "claude",
+    true,
+    [
+     {
+      "label": "app#43",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/43"
+     },
+     {
+      "label": "core#42",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/42"
+     }
+    ]
+   ],
+   [
+    "Versión 2.0.0 con trazabilidad",
+    "usuario",
+    true,
     []
+   ],
+   [
+    "El revisor tiene en cuenta las decisiones del PR",
+    "claude",
+    false,
+    [
+     {
+      "label": "core#43",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/43"
+     }
+    ]
    ]
   ]
  },
  {
   "id": "E",
-  "title": "Informe de trazabilidad",
+  "title": "Trazabilidad y cuadro de mando del proceso",
   "phase": "Gobierno",
-  "status": "todo",
-  "desc": "Cada release enlaza petición, spec, PR, escaneos, aprobaciones y despliegue.",
+  "status": "next",
+  "desc": "Cada release enlaza petición, decisión, spec, PRs, revisiones, checks y despliegue. Un cuadro de mando muestra en qué fase está cada petición, qué espera a una persona y qué ha fallado.",
   "alm": [
    "11",
    "12"
@@ -1621,13 +1708,50 @@ const TASKS = [
   "prereqs": [],
   "subs": [
    [
-    "Generador del informe por release",
+    "Trazabilidad en cada Release (trazabilidad.py y trazabilidad.json)",
     "claude",
-    false,
+    true,
+    [
+     {
+      "label": "core#39",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/39"
+     },
+     {
+      "label": "app#39",
+      "href": "https://github.com/acbacb77/poc-almagentic-app/pull/39"
+     }
+    ]
+   ],
+   [
+    "Colector del proceso, panel «Proceso ALM» y alertas del proceso en Grafana",
+    "claude",
+    true,
+    [
+     {
+      "label": "gitops#22",
+      "href": "https://github.com/acbacb77/poc-almagentic-gitops/pull/22"
+     }
+    ]
+   ],
+   [
+    "Panel «Flujo ALM» (artifact) y su generador",
+    "claude",
+    true,
+    [
+     {
+      "label": "core#40",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/40"
+     }
+    ]
+   ],
+   [
+    "Primera Release con trazabilidad: v2.0.0",
+    "usuario",
+    true,
     []
    ],
    [
-    "Revisar el informe",
+    "Decidir cómo se refresca Flujo ALM y cerrar la tarea",
     "usuario",
     false,
     []
