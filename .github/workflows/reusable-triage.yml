@@ -83,7 +83,7 @@ jobs:
           jq '{subtype, is_error, num_turns, total_cost_usd}' claude-output.json || true
 
       - name: Guardar la respuesta
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: triage-${{ inputs.issue-number }}
           path: |
