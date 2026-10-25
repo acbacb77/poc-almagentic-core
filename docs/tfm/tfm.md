@@ -759,9 +759,59 @@ El primer `@claude` de app#34 hizo bien el cambio y aun así no se publicó. cor
 
 El CI de core prueba los scripts, pero no ejecuta los workflows del agente, así que nada avisó antes. Es el mismo patrón que el sandbox en Ubuntu 26.04 de la tarea 11: un cambio externo desactiva una pieza del agente sin que ningún check falle. Queda como trabajo pendiente una prueba de humo de los workflows del agente en el CI de core.
 
+## Extensión D: retirar una versión de la API
+
+Un ciclo de vida completo no termina en desplegar. Las interfaces publicadas también envejecen y se retiran, y retirarlas bien es más difícil que añadirlas: hay que dar una alternativa, avisar a quien las usa, saber cuándo ya nadie las usa y cortar sin romper a quien llegue tarde. La extensión D recorre ese camino con la API del catálogo: una v2 con el precio como importe y moneda, v1 marcada como obsoleta y, después, retirada. Todo pasa por peticiones, el agente y las mismas aprobaciones que cualquier otro cambio.
+
+![Figura 13. Retirada de una versión: convivencia de v1 y v2 con avisos, criterio de retirada con datos y retirada con 410.](figuras/retirada.png)
+
+El responsable tomó tres decisiones antes de escribir la primera petición:
+
+| Decisión | Elección | Alternativas descartadas |
+|---|---|---|
+| Formato del precio en v2 | `{"importe": "12.50", "moneda": "EUR"}`: importe en texto decimal y moneda ISO 4217 | Céntimos enteros (obliga al cliente a conocer los decimales de cada moneda); número decimal (vuelve a los errores de coma flotante que v1 evita) |
+| Cuándo se retira v1 | Pasada la fecha de `Sunset` **y** sin tráfico a v1, medido en Prometheus | Solo la fecha (rompe a los rezagados); decisión manual sin datos |
+| Qué responde v1 retirada | `410 Gone` con `Link` a su equivalente en v2 | 404 (como si nunca hubiera existido); redirección 308 (los clientes seguirían funcionando, pero recibirían el precio en otro formato, justo el cambio incompatible) |
+
+Para que el criterio de retirada se pudiera comprobar, Grafana ganó dos paneles: consultas por versión de la API y consultas a v1 en las últimas 24 horas (gitops#19). La aplicación ya etiquetaba sus métricas con la plantilla de la ruta, así que no hizo falta tocar el código.
+
+### Primera petición: v2 y v1 obsoleta
+
+La petición #36 pedía las dos cosas a la vez, porque las cabeceras de v1 apuntan a v2. El triage propuso seis criterios, añadió uno que no estaba en la petición (las cabeceras también en los errores de v1) y señaló como riesgos que el `Sunset` estuviera a tres días y que hay monedas sin dos decimales. El responsable respondió a sus cinco preguntas en un comentario con los formatos exactos: `Deprecation` como fecha estructurada (RFC 9745), `Sunset` como fecha HTTP (RFC 8594) y `Link` con `rel="successor-version"`.
+
+| Paso | Resultado |
+|---|---|
+| Spec 004 (app#37) | 4 historias y 18 requisitos. Recoge las respuestas como supuestos y marca la retirada como fuera de alcance. El revisor comprobó a mano que `@1792969200` es el 26 de octubre a medianoche en Madrid |
+| Código (app#38) | v2 con su propio modelo, v1 con un modelo propio para que su cuerpo no cambie, un middleware que añade las tres cabeceras y un intento de inyección de cabeceras a través del `id` cubierto por un test. 147 tests sin tocar ninguno existente |
+| Desviación | La spec decía que la moneda era un dato de cada producto, y un test de la spec 001 prohíbe campos nuevos en el producto. El agente la puso en el catálogo y lo explicó. El responsable lo aceptó con un `@claude` que pidió hacer explícita la moneda en `catalogo.json`, actualizar la spec y añadir tests con otra moneda |
+| Despliegue | Se fusionó por error la promoción del merge de la spec, que no cambia código; la buena estaba al lado (gitops#21) |
+
+### Segunda petición: la retirada
+
+El responsable adelantó la retirada: ya había comprobado que nada usaba v1 en staging. La petición #40 lo dejó escrito: se retira antes del `Sunset` anunciado y se acepta no cumplir la fecha porque es staging y no hay clientes externos. La trazabilidad de una decisión así es justo lo que interesa conservar.
+
+La implementación (app#42) sustituyó v1 por una ruta comodín que responde 410 a cualquier método y ruta, con `Link` y las mismas cabeceras, y 64 tests nuevos. Falló por dos motivos que no eran errores del agente:
+
+- **La plataforma tenía la API escrita a fuego.** La prueba de humo de core lanzaba una búsqueda con `curl -f` contra `/api/v1/productos` para comprobar que el texto de `q` no llega a los logs. Con v1 retirada, curl salía con error. core#41 lanza la búsqueda sin exigir un estado concreto. Es el caso que el responsable había anticipado: un PR de producto que destapa algo que hay que arreglar en core.
+- **La spec se contradecía.** Pedía sustituir los tests de v1 y a la vez no tocar los de v2, pero los de v2 comparaban cada respuesta con la de v1. El agente no tocó ningún test existente, que es una regla de su prompt, dejó 22 en rojo y explicó en el PR cuáles eran y cómo adaptarlos. El responsable lo autorizó con un `@claude` concreto: comparar v2 con el catálogo, pasar los tests de observabilidad a rutas de v2 y corregir la spec.
+
+Al preparar la versión apareció un tercer problema: el PR de la retirada se tituló `feat:`, así que `release.py` habría publicado la 1.1.0. Retirar una versión publicada rompe a sus clientes y debe subir la mayor. Un PR que documenta la API en el README con `docs!:` (app#43) llevó la versión a 2.0.0, y desde core#42 el agente titula con `feat!:` y `BREAKING CHANGE` los PRs de las peticiones de tipo retirada.
+
+### Resultado
+
+| Prueba | Resultado |
+|---|---|
+| v2 en staging | `GET /api/v2/productos/taza-ceramica` devuelve `"precio": {"importe": "9.50", "moneda": "EUR"}` |
+| v1 obsoleta | Cada respuesta de v1, errores incluidos, lleva `Deprecation`, `Sunset` y `Link` |
+| v1 retirada | Cualquier ruta y método de `/api/v1` responde 410 con `Link` a v2 |
+| Versión | La v2.0.0 muestra la retirada en «Cambios incompatibles», marca con 🤖 las tres features del agente e incluye la tabla de trazabilidad |
+| Tiempos | 2,3 horas de la petición #36 a staging; 0,4 horas en la #40 |
+
+El revisor automático marcó en las dos implementaciones, con hallazgos altos, cambios que el responsable había autorizado en el mismo PR. No leía los comentarios. Se fusionaron igualmente, con su 🔴 y con bypass, y eso es peligroso: si el revisor avisa de cosas ya decididas, la gente aprende a no leerlo. core#43 le da los comentarios de los responsables como contexto y añade a las evals un caso con una decisión autorizada.
+
 ## Tareas pendientes
 
-> Las secciones de la tarea 12 y de las extensiones D y E se añadirán a medida que se implementen: retirada y trazabilidad.
+> Las secciones de la tarea 12 y de la extensión E (trazabilidad y cuadro de mando del proceso) se añadirán al cerrarlas.
 
 # Iteraciones con modelos, pruebas y resultados
 
@@ -1009,6 +1059,26 @@ El registro que sigue resume toda la conversación del proyecto. Se han omitido 
 | 130 | «gitops#16 tiene conflictos; podemos esperar al 17» | Explica que cada promoción incluye las anteriores y propone esperar a la de app#34 | Un solo despliegue |
 | 131 | «Todo merged» | Cierra la documentación de la extensión | Extensión C cerrada |
 
+### Fase 19 · Retirada de v1 (25 de octubre)
+
+Las iteraciones de la extensión E, intercaladas con estas el mismo día, se recogerán en su propia fase al cerrarla.
+
+| # | Petición del autor | Respuesta y acción del modelo | Resultado |
+|---|---|---|---|
+| 132 | «Continuamos; en la E habrá que monitorizar todo el proceso» | Apunta el alcance nuevo de E con sus casos de uso y plantea tres decisiones para D | Decisiones del autor |
+| 133 | Elige texto decimal e ISO 4217, Sunset y sin tráfico, y 410 | Añade los paneles de tráfico por versión (gitops#19) y redacta la petición | Petición #36 |
+| 134 | «Triage ok» | Detecta que el issue no tiene título y redacta las respuestas a las cinco preguntas, con los formatos de las cabeceras | Decisión registrada |
+| 135 | «Ya tiene el label aprobado» | Revisa la spec y el código, encuentra la desviación de la moneda y redacta el `@claude` | |
+| 136 | «No funciona aún» | El PR seguía sin aprobar; explica la promoción equivocada | |
+| 137 | «Sigue saliendo FR-005 en amarillo» | Explica que el revisor no lee las decisiones del PR | Mejora identificada |
+| 138 | «Todo mergeado y desplegado» | Ve que se fusionó la promoción del merge de la spec y no la del código | v2 en staging |
+| 139 | «No hace falta esperar al 29» | Avisa del `Sunset` anunciado y redacta la petición de retirada con la decisión escrita | Petición #40 |
+| 140 | «La PR 42 falla» | Reproduce los 22 fallos, identifica la contradicción de la spec y el fallo de la prueba de humo de core (core#41) | |
+| 141 | «Listo, v1 deprecada» | Detecta que la versión saldría 1.1.0; abre app#43 y core#42 | |
+| 142 | «No sale la v2.0.0» | La versión no se había lanzado; explica el lanzamiento manual | |
+| 143 | «Listo» | Revisa la v2.0.0 y su trazabilidad: fusiones con el revisor en rojo y bypass, y dos fugas pendientes en v1 | |
+| 144 | «1 y 2 ok; cerrar la D, la E no» | Abre core#43 y cierra la documentación de la extensión | Extensión D cerrada |
+
 ## Pruebas realizadas y resultados
 
 ### Pruebas automáticas
@@ -1040,6 +1110,8 @@ El registro que sigue resume toda la conversación del proyecto. Se han omitido 
 | Evals con modelo real | 13 casos con sonnet y con haiku | 13/13 los dos; haiku, 12 veces más barato y con más hallazgos menores |
 | Dependabot (app#33, app#34, core#31, gitops#14) | Primera ronda semanal | Checks en verde y despliegue en una promoción |
 | `@claude` en un PR de Dependabot (app#34) | Cambiar httpx por httpx2 | Commit verificado; 117 tests sin el aviso; licencia comprobada por una persona |
+| Retirada de v1 (app#38 y app#42) | v2, cabeceras de obsolescencia y 410 en staging | Respuestas correctas, 148 tests en la app, versión 2.0.0 con la retirada como cambio incompatible |
+| Contradicción en una spec (app#42) | Spec que pide no tocar tests que dependen de lo que se retira | El agente no rompe su regla, deja los tests en rojo y lo explica; una persona lo autoriza |
 | Triage (`apply.py`, `build_prompt.py`) | 12 casos: salida estructurada, valores inválidos, etiquetas arbitrarias, referencias falsas, neutralización de texto, sospecha de inyección | 12/12 superadas |
 
 ### Pruebas del harness en el entorno real
@@ -1090,6 +1162,9 @@ El caso de inyección prueba el diseño en dos niveles. El modelo detectó el in
 | Grafana reiniciado por el liveness | SQLite en `emptyDir` y poca CPU: `/api/health` en 503 | WAL, más margen y más CPU (gitops#9) | Un 137 no siempre es memoria; hay que mirar el motivo del kubelet |
 | El agente rechaza su propia spec | El guardarraíl esperaba una sola carpeta de spec y la decisión pedía tocar dos | Buscar la carpeta nueva solo entre los ficheros creados (core#27) | Un guardarraíl demasiado estricto bloquea trabajo correcto; falló en seguro y con un mensaje claro |
 | El agente no puede ejecutar comandos | `ubuntu-latest` pasó a Ubuntu 26.04 y el sandbox no arranca | Runner fijado y comprobación previa (core#28) | Un cambio del proveedor puede desactivar una capa sin que nada falle; ahora el fallo es visible y para el job |
+| Prueba de humo atada a `/api/v1` | El pipeline de core suponía una ruta de la app | Sin exigir estado (core#41) | La plataforma tampoco debe depender del contrato de una versión concreta |
+| Versión menor para una retirada | El PR se tituló `feat:` | `docs!:` y `feat!:` automático en retiradas (app#43, core#42) | El tipo de petición debe llegar al título del PR para que la versión sea honesta |
+| Revisor en rojo sobre lo autorizado | No leía los comentarios del PR | Bloque de decisiones (core#43) | Un aviso que se ignora a menudo deja de proteger |
 | Evals sin arrancar | Las entradas de `workflow_dispatch` son texto aunque se declaren número | `fromJSON` (app#35) | actionlint no lo detecta; el error solo aparece en la página de la ejecución |
 | Saltos mayores de acciones en core | Un workflow con acciones por etiqueta | Fijarlas por SHA (core#36) | Dependabot también sirve para encontrar lo que no sigue la norma |
 | Cambio del agente descartado | Una actualización de Dependabot (setup-uv) en verde rompió los jobs del agente | Sin caché de setup-uv (core#37) | Los checks verdes de un PR de dependencias no prueban los workflows que no se ejecutan en él |
@@ -1100,18 +1175,18 @@ El caso de inyección prueba el diseño en dos niveles. El modelo detectó el in
 
 | Métrica | Valor |
 |---|---|
-| Tareas completadas | 15 de 18 (1, 2, 3, A, 4, 5, 6, 7, 8, F, 9, 10, B, 11 y C) |
-| PRs fusionados | 63 (22 en core, 28 en app y 13 en gitops; seis abiertos por el agente, seis con commits suyos pedidos con `@claude`, seis abiertos por el promotor y cuatro por Dependabot), más la documentación |
-| Pruebas automáticas | 302 superadas (57 de harness y triage, 23 de gobierno de PRs, 47 de los agentes en Actions, 8 de la cadena de suministro, 7 de la promoción, 19 de las versiones, 16 de la observabilidad, 8 de las evals y 117 de la aplicación) |
+| Tareas completadas | 16 de 18 (1, 2, 3, A, 4, 5, 6, 7, 8, F, 9, 10, B, 11, C y D) |
+| PRs fusionados | 80 (25 en core, 34 en app y 21 en gitops; diez abiertos por el agente en app, doce promociones y cuatro de Dependabot), más la documentación |
+| Pruebas automáticas | 343 superadas en `main` (57 de harness y triage, 23 de gobierno de PRs, 47 de los agentes en Actions, 8 de la cadena de suministro, 7 de la promoción, 23 de las versiones y la trazabilidad, 8 de las evals, 22 de la observabilidad y 148 de la aplicación), más 10 casos de reglas de alerta |
 | Evals de los agentes | 13 casos; 13/13 con sonnet y con haiku (0,35 frente a 0,03 USD equivalentes por ronda) |
-| Iteraciones registradas con el asistente | 131 |
-| Versiones publicadas | core hasta `v1.9.3` (automáticas) y app `v1.0.0` |
+| Iteraciones registradas con el asistente | 144 |
+| Versiones publicadas | core hasta `v1.9.x` (automáticas) y app `v1.0.0` y `v2.0.0` (con trazabilidad) |
 | Tiempo de una feature con el agente autónomo | 25 minutos de la petición al cierre (issue #18), con cuatro decisiones humanas; 25 minutos de `aprobado` a cierre en un issue abierto por una alerta (#29), con cinco |
 | Alertas convertidas en issues | 2 (una cerrada sin trabajo, otra resuelta por el agente y desplegada) |
-| Problemas de entorno resueltos | 34 |
+| Problemas de entorno resueltos | 40 |
 | Vulnerabilidades de diseño detectadas antes de explotarse | 2 (aprobación imposible sin identidad propia; herencia de credenciales) |
 
-> Este capítulo se ampliará con las iteraciones y pruebas de la tarea 12 y de D y E.
+> Este capítulo se ampliará con las iteraciones y pruebas de la tarea 12 y de la extensión E.
 
 # Documentación técnica reproducible
 
@@ -1313,7 +1388,14 @@ for i in $(seq 1 60); do curl -s -o /dev/null "localhost:8000/api/v1/productos?q
 4. Revisar cada PR de Dependabot como cualquier otro. Si hace falta un cambio que Dependabot no sabe hacer, comentar `@claude` en el propio PR.
 5. Antes de cambiar el modelo de un agente: en app, *Actions → evals → Run workflow* con el modelo actual y el candidato, por ejemplo `sonnet,haiku`.
 
-> Los pasos de la tarea 12 y de D y E se añadirán al completarlas.
+### Extensión D. Retirada de una versión de la API
+
+1. En gitops: añadir a `paneles/api.json` los paneles «Consultas por versión de la API» y «Consultas a v1 en 24 h» y fusionar.
+2. En app, en la web de GitHub: abrir la petición de la versión nueva y de la obsolescencia de la anterior, con el formato de las cabeceras (`Deprecation`, `Sunset`, `Link`) y la fecha de `Sunset`. Responder al triage y poner `aprobado`. Revisar y fusionar la spec y el código, y aprobar la promoción que lleva el commit del código.
+3. Cuando pase la fecha y el panel de v1 marque 0 (o una persona decida adelantarla y lo deje escrito), abrir la petición de retirada con el tipo «Retirar algo». El agente titula la implementación con `feat!:`.
+4. En app: *Actions → release → Run workflow*. La versión sube la mayor y la retirada aparece en «Cambios incompatibles».
+
+> Los pasos de la tarea 12 y de la extensión E se añadirán al completarlas.
 
 ## Estructura de los repositorios
 
@@ -1374,6 +1456,9 @@ poc-almagentic-gitops/
 | `@claude` hace el cambio pero el bot dice que no ha podido completarlo y el job falla en «Post Run setup-uv» | Desactivar la caché de setup-uv en los jobs del agente (core#37) y repetir el comentario |
 | Dependabot abre saltos mayores de acciones que el resto de workflows no usan | Fijar ese workflow por SHA como los demás y cerrar los PRs |
 | Varias promociones abiertas en conflicto | Fusionar solo la más reciente: incluye las anteriores |
+| `image / build` falla con exit 22 tras retirar una ruta | La prueba de humo de core no debe exigir un estado concreto (core#41) |
+| El agente deja tests en rojo y dice que no puede tocarlos | Leer su explicación en el PR; si procede, autorizar con `@claude` qué tests puede adaptar |
+| La versión de una retirada sale menor | Fusionar un PR con `!` en el título antes de lanzar `release` |
 | El merge de la spec no lanza la implementación | La rama del PR debe empezar por `spec/<issue>-` y venir del mismo repositorio |
 
 # Conclusiones y trabajo futuro
@@ -1395,6 +1480,8 @@ poc-almagentic-gitops/
 12. Las capas de seguridad necesitan vigilarse a sí mismas. El sandbox dejó de funcionar por un cambio del proveedor de los runners sin que nada fallara, y el agente siguió trabajando sin poder probar su código. El CI lo compensó esta vez. Desde entonces el job comprueba el sandbox antes de llamar al modelo, igual que el devcontainer usa `failIfUnavailable` desde la tarea 4.
 
 13. En un ALM agéntico, el mantenimiento incluye a los agentes. Dependabot mantiene las dependencias de la aplicación, pero los agentes dependen también del modelo, de la versión de Claude Code, de las acciones y del sistema del runner. Dos veces un cambio externo desactivó una pieza del agente sin que fallara ningún check. Las evals cubren el cambio de modelo, y queda pendiente una prueba de humo para el resto.
+
+14. Para retirar una versión hacen falta datos además de una fecha. La fecha de `Sunset` avisa a los clientes; el tráfico dice si se puede retirar, y quien decide adelantarla o retrasarla es una persona que deja la decisión escrita en la petición. El agente hizo el trabajo mecánico de las dos peticiones; lo difícil fue lo que tuvo que decidir una persona: la moneda, la contradicción de la spec y el número de la versión.
 
 ## Trabajo futuro
 

@@ -2,7 +2,7 @@
 
 Registro de todo lo hecho en la POC: decisiones, pasos manuales, PRs y problemas resueltos. Se actualiza al cerrar cada tarea, junto con la [memoria del TFM](../tfm/README.md), que es requisito para cerrar la POC.
 
-**Última actualización:** 25 de octubre de 2026 · **Avance:** 15 de 18 tareas (1, 2, 3, A, 4, 5, 6, 7, 8, F, 9, 10, B, 11 y C)
+**Última actualización:** 25 de octubre de 2026 · **Avance:** 16 de 18 tareas (1, 2, 3, A, 4, 5, 6, 7, 8, F, 9, 10, B, 11, C y D)
 
 **Cada tarea tiene sus prerrequisitos manuales y sus subtareas en orden.** **Leyenda de responsables:** Usuario 👤 (acción manual) · Claude 🤖 (sesión de trabajo) · Agente (bot `almagentic-agent` en el devcontainer) · Automático ⚙️ (GitHub Actions, Argo CD)
 
@@ -75,8 +75,8 @@ Las tareas con letra son **extensiones ALM**: se añadieron al plan original y s
 | ↳ B | Gestión de releases | Extensión ALM (entre 10 y 11) | ✅ Hecha |
 | **11** | Cerrar el loop de operación | Principal | ✅ Hecha |
 | ↳ C | Mantenimiento continuo | Extensión ALM (entre 11 y 12) | ✅ Hecha |
-| ↳ D | Retirada de un endpoint v1 | Extensión ALM (entre 11 y 12) | ⏭️ Siguiente |
-| ↳ E | Informe de trazabilidad | Extensión ALM (entre 11 y 12) | Pendiente |
+| ↳ D | Retirada de un endpoint v1 | Extensión ALM (entre 11 y 12) | ✅ Hecha |
+| ↳ E | Trazabilidad y cuadro de mando del proceso | Extensión ALM (entre 11 y 12) | ⏭️ Siguiente |
 | **12** | Guion y ensayo de la demo | Principal | Pendiente |
 
 ---
@@ -613,11 +613,11 @@ Prometheus vigila la API en staging. Una alerta llega por Alertmanager a un puen
 
 ---
 
-> ## ↳ Tarea D · Retirada de un endpoint v1 ⏭️
+> ## ↳ Tarea D · Retirada de un endpoint v1 ✅
 >
 > **Extensión ALM** · se ejecuta entre la tarea 11 y la 12.
 >
-> v2 del catálogo con importe y moneda; deprecación, migración y retirada de v1.
+> v2 del catálogo con precio {importe, moneda}; v1 avisa con Deprecation, Sunset y Link; se retira con 410 Gone cuando una persona lo decide con la fecha y el tráfico a la vista. La versión de la app pasa a 2.0.0.
 >
 > ### Prerrequisitos manuales
 >
@@ -627,19 +627,32 @@ Prometheus vigila la API en staging. Una alerta llega por Alertmanager a un puen
 >
 > | # | Subtarea | Quién | Estado | Enlaces |
 > |---|---|---|---|---|
-> | D.1 | Abrir la petición de la v2 | Usuario 👤 | ⬜ |  |
-> | D.2 | Implementar /api/v2 con importe y moneda | Agente (bot) | ⬜ |  |
-> | D.3 | Marcar v1 como deprecada (cabeceras Deprecation y Sunset) | Agente (bot) | ⬜ |  |
-> | D.4 | Retirar v1 | Agente (bot) | ⬜ |  |
-> | D.5 | Aprobar cada PR | Usuario 👤 | ⬜ |  |
+> | D.1 | Paneles de tráfico por versión (criterio de retirada) | Claude 🤖 | ✅ | [gitops#19](https://github.com/acbacb77/poc-almagentic-gitops/pull/19) |
+> | D.2 | Petición #36: v2 y v1 obsoleta; decisiones en un comentario | Usuario 👤 | ✅ | [#36 v2](https://github.com/acbacb77/poc-almagentic-app/issues/36) |
+> | D.3 | Spec 004 y código: v2, cabeceras de obsolescencia, moneda del catálogo | Agente (bot) | ✅ | [app#37](https://github.com/acbacb77/poc-almagentic-app/pull/37) · [app#38](https://github.com/acbacb77/poc-almagentic-app/pull/38) |
+> | D.4 | Desplegar (la promoción correcta, no la del merge de la spec) | Usuario 👤 | ✅ | [gitops#21](https://github.com/acbacb77/poc-almagentic-gitops/pull/21) |
+> | D.5 | Petición #40: retirar v1 antes del Sunset (decisión registrada) | Usuario 👤 | ✅ | [#40 retirada](https://github.com/acbacb77/poc-almagentic-app/issues/40) |
+> | D.6 | Arreglo: la prueba de humo de core llamaba a /api/v1 | Claude 🤖 | ✅ | [core#41](https://github.com/acbacb77/poc-almagentic-core/pull/41) |
+> | D.7 | Spec 005 y código: 410 Gone; tests de v2 adaptados con autorización | Agente (bot) | ✅ | [app#41](https://github.com/acbacb77/poc-almagentic-app/pull/41) · [app#42](https://github.com/acbacb77/poc-almagentic-app/pull/42) |
+> | D.8 | La retirada es incompatible: docs! y feat! en el agente | Claude 🤖 | ✅ | [app#43](https://github.com/acbacb77/poc-almagentic-app/pull/43) · [core#42](https://github.com/acbacb77/poc-almagentic-core/pull/42) |
+> | D.9 | Versión 2.0.0 con trazabilidad | Usuario 👤 | ✅ |  |
+> | D.10 | El revisor tiene en cuenta las decisiones del PR | Claude 🤖 | ⬜ | [core#43](https://github.com/acbacb77/poc-almagentic-core/pull/43) |
+>
+> ### Detalle
+>
+> **Decisiones**: precio v2 `{"importe": "12.50", "moneda": "EUR"}` (texto decimal e ISO 4217; la moneda es del catálogo); criterio de retirada fecha de Sunset + sin tráfico a v1 (paneles «Consultas por versión» y «Consultas a v1 en 24 h»); v1 retirada responde 410 Gone con `Link` a v2. El responsable adelantó la retirada al 25-10 (Sunset anunciado: 28-10): queda escrito en la petición #40.
+>
+> **Qué pasó por el camino**: el revisor marcó dos veces como incumplimiento cambios que el responsable había autorizado en el PR (no leía los comentarios: core#43). La spec 005 se contradecía (sustituir los tests de v1 y no tocar los de v2, que comparaban con v1): el agente paró y lo explicó, y una persona lo autorizó con `@claude`. La prueba de humo de core tenía `/api/v1` escrito a fuego (core#41). Y la retirada salió como `feat:`, que habría dado 1.1.0: con `docs!:` (app#43) salió la 2.0.0, y el agente ya marca así las retiradas (core#42).
+>
+> **Pendiente**: el log de acceso de uvicorn aún registra la ruta recibida en `/api/v1/…` y `/api/v1` sin barra puede dar 307; va en una petición nueva.
 
 ---
 
-> ## ↳ Tarea E · Informe de trazabilidad ⬜
+> ## ↳ Tarea E · Trazabilidad y cuadro de mando del proceso ⏭️
 >
 > **Extensión ALM** · se ejecuta entre la tarea 11 y la 12.
 >
-> Cada release enlaza petición, spec, PR, escaneos, aprobaciones y despliegue.
+> Cada release enlaza petición, decisión, spec, PRs, revisiones, checks y despliegue. Un cuadro de mando muestra en qué fase está cada petición, qué espera a una persona y qué ha fallado.
 >
 > ### Prerrequisitos manuales
 >
@@ -649,10 +662,11 @@ Prometheus vigila la API en staging. Una alerta llega por Alertmanager a un puen
 >
 > | # | Subtarea | Quién | Estado | Enlaces |
 > |---|---|---|---|---|
-> | E.1 | Generador del informe por release | Claude 🤖 | ⬜ |  |
-> | E.2 | Revisar el informe | Usuario 👤 | ⬜ |  |
->
-> _Subtareas previstas: se ajustarán al llegar a la tarea._
+> | E.1 | Trazabilidad en cada Release (trazabilidad.py y trazabilidad.json) | Claude 🤖 | ✅ | [core#39](https://github.com/acbacb77/poc-almagentic-core/pull/39) · [app#39](https://github.com/acbacb77/poc-almagentic-app/pull/39) |
+> | E.2 | Colector del proceso, panel «Proceso ALM» y alertas del proceso en Grafana | Claude 🤖 | ✅ | [gitops#22](https://github.com/acbacb77/poc-almagentic-gitops/pull/22) |
+> | E.3 | Panel «Flujo ALM» (artifact) y su generador | Claude 🤖 | ✅ | [core#40](https://github.com/acbacb77/poc-almagentic-core/pull/40) |
+> | E.4 | Primera Release con trazabilidad: v2.0.0 | Usuario 👤 | ✅ |  |
+> | E.5 | Decidir cómo se refresca Flujo ALM y cerrar la tarea | Usuario 👤 | ⬜ |  |
 
 ---
 
@@ -720,6 +734,12 @@ _Subtareas previstas: se ajustarán al llegar a la tarea._
 | Dependabot abre saltos mayores de `checkout`, `setup-node` y `upload/download-artifact` en core | `reusable-triage.yml` usaba las acciones por etiqueta (`@v4`) | Fijarlas por SHA como el resto y cerrar esos PRs (core#36) |
 | `@claude` hace el cambio pero el bot dice que no ha podido completarlo | setup-uv 10.3.2 (core#31, de Dependabot) falla al final del job si su caché no existe, y el agente usa otra | `enable-cache: false` en los jobs del agente (core#37) y repetir el comentario |
 | El revisor automático aparece omitido en los PRs de Dependabot | Dependabot no recibe los secretos de Actions | Es lo esperado: los revisa una persona |
+| El revisor marca 🟡 o 🔴 un cambio de spec que ya autorizaste en el PR | El revisor no leía los comentarios del PR | core#43: lee las decisiones de OWNER, MEMBER y COLLABORATOR; mientras, deja escrita la decisión en un comentario |
+| Se fusiona una promoción que no lleva el cambio esperado | Cada merge en app abre una promoción; la del merge de la spec no cambia código | Mirar el commit del título (`(abc1234)`) o el panel Flujo ALM; la última promoción incluye todo lo anterior |
+| `image / build` falla con exit 22 al retirar v1 | La prueba de humo de core llamaba a `/api/v1` con `curl -f` | core#41: la prueba ya no exige un estado concreto |
+| El agente deja 22 tests en rojo y dice que no puede tocarlos | La spec 005 pedía sustituir los tests de v1 y no tocar los de v2, que comparaban con v1 | Autorizar con `@claude` qué tests puede adaptar y que corrija la spec |
+| La versión con una retirada sale como 1.x en vez de 2.0.0 | El PR de la retirada se tituló `feat:` | `docs!:` en un PR posterior (app#43); el agente ya titula las retiradas con `feat!:` (core#42) |
+| La Release no aparece | En app las versiones se lanzan a mano | *Actions → release → Run workflow* en `main` |
 
 ---
 
@@ -740,5 +760,7 @@ _Subtareas previstas: se ajustarán al llegar a la tarea._
 - CI de core: ejecutar los workflows del agente en una prueba de humo para que una actualización de una acción no los rompa sin aviso.
 - Sandbox del agente en Ubuntu 26.04 (hoy fijado a `ubuntu-24.04`) y resto de workflows al pasar `ubuntu-latest` a 26.
 - Grafana: si vuelve a reiniciarse, volumen persistente o base de datos externa.
+- app: el log de acceso de uvicorn registra la ruta recibida en `/api/v1/…` (FR-013 de la spec 005) y `/api/v1` sin barra puede responder 307: petición nueva.
+- Bypass: siete PRs (app y gitops) se fusionaron sin aprobación vigente porque un commit posterior la descartó; valorar «Require approval of the most recent push» o quitar el bypass en gitops.
 - Promocionar sin reconstruir la imagen o construcción reproducible (digests distintos para el mismo commit).
 - Argo CD: valorar verificación de firmas también dentro del clúster (Kyverno o policy-controller).
