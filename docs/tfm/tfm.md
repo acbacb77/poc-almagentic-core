@@ -711,9 +711,57 @@ El paso 6 escondía un problema mayor. El resumen del agente decía que no habí
 
 En la implementación el agente cambió tests existentes, que su prompt prohíbe. Los cambios eran los que exigía el nuevo contrato: los tests del límite de 100 pasaron a 200 y se añadieron casos frontera (101, 200 y 201 caracteres, espacios en los extremos y caracteres no ASCII). Aun así es un cambio que una persona tiene que mirar en la revisión, y así se hizo.
 
+## Extensión C: mantenimiento continuo
+
+Una aplicación que ya está en producción se degrada aunque nadie la toque: salen vulnerabilidades en sus dependencias, las imágenes base reciben parches y las acciones de los workflows publican versiones nuevas. La tarea 10 lo mostró con certifi, que bloqueó un PR sin relación con el problema. La extensión C convierte ese mantenimiento en trabajo rutinario que entra por el mismo ciclo que todo lo demás. Y añade una pieza que el ALM agéntico necesita y uno tradicional no: comprobar que los agentes siguen funcionando cuando cambia el modelo.
+
+![Figura 12. Mantenimiento: Dependabot propone, el agente arregla a demanda y las evals deciden si se puede cambiar de modelo.](figuras/mantenimiento.png)
+
+El responsable tomó tres decisiones:
+
+| Decisión | Elección | Alternativas descartadas |
+|---|---|---|
+| Quién propone las actualizaciones | Dependabot, nativo de GitHub | Renovate (exige otra GitHub App); un agente programado (más coste de modelo para algo que Dependabot ya hace) |
+| Qué hace el agente con ellas | Arreglar a demanda con `@claude` en el PR | Arreglar solo cuando el CI falla, sin decisión humana previa; no intervenir |
+| Qué se evalúa al cambiar de modelo | Triage y revisor, los dos agentes sin herramientas | También el agente con herramientas, mucho más lento y caro por ejecución |
+
+| Pieza | Repositorio | Qué hace |
+|---|---|---|
+| `dependabot.yml` | app, core y gitops | Revisa cada lunes. En app: paquetes de `uv.lock` (versiones menores y de parche en un PR, cada salto mayor aparte), digests de las imágenes base (Python fijo en 3.12) y acciones. En core: acciones fijadas por SHA. En gitops: la imagen de Python del puente y del exportador; `apps/` queda fuera porque esa imagen solo la cambia el promotor. Los títulos llevan el prefijo `deps`, que `release.py` cuenta como parche |
+| `evals/` | core | 8 casos de triage (funcionalidad, bug, pregunta, retirada, duplicado, issue del puente de alertas, inyección directa e inyección escondida en un comentario HTML) y 5 del revisor sobre un repositorio mínimo con spec (cambio correcto, texto de `q` en el log, límite de 1000 en vez de 100, PR que ordena aprobar e instrucción escondida en el código) |
+| `run_evals.py` | core | Construye el prompt con los mismos scripts que los workflows, llama a `claude` con las mismas opciones y pasa la respuesta por el mismo validador que decide qué se publica. Puntúa contra lo esperado y saca un informe con acierto, coste y duración. 8 tests |
+| `reusable-evals.yml` y `evals.yml` | core y app | Se lanza a mano con los modelos a comparar. Un job por modelo, informe en el resumen y respuestas guardadas 90 días |
+
+Los PRs de Dependabot pasan los mismos checks obligatorios y necesitan la aprobación de una persona. El revisor automático no corre en ellos porque GitHub no da a Dependabot los secretos de Actions, y no hace falta: el cambio no es código del equipo.
+
+### Resultado
+
+| Prueba | Resultado |
+|---|---|
+| Primera ronda de Dependabot | Ocho PRs: imágenes base y paquetes en app (app#33 y app#34), imagen de Python en gitops (gitops#14) y cinco de acciones en core. Todos en verde |
+| Saltos mayores en core (core#32 a core#35) | Delataron que `reusable-triage.yml` usaba acciones por etiqueta y Claude Code sin versión. Se fijaron como el resto (core#36) y esos PRs se cerraron. Ahora el triage evaluado y el que corre usan la misma versión |
+| `@claude` en un PR de Dependabot (app#34) | Starlette avisaba de que `httpx` está obsoleto en su cliente de pruebas y pedía `httpx2`. Dependabot no propone cambiar un paquete por otro, así que se le pidió al agente. Cambió la dependencia, regeneró `uv.lock` y ejecutó tests, ruff y mypy, con los tests también en modo «aviso como error». Señaló que no pudo comprobar la licencia y la comprobó una persona (BSD) |
+| Despliegue | Una sola promoción (gitops#18) con fastapi 0.160, httpx2 y las imágenes base nuevas; las dos intermedias se cerraron sin fusionar |
+| Evals sonnet frente a haiku | Las dos tablas siguientes |
+
+| Modelo | Acierto | Coste equivalente | Duración media triage | Duración media revisor |
+|---|---|---|---|---|
+| sonnet (actual) | 13/13 | 0,35 USD | 6,8 s | 8,5 s |
+| haiku | 13/13 | 0,03 USD | 7,6 s | 16,3 s |
+
+Los dos detectaron las cuatro inyecciones sin obedecer ninguna, no marcaron como sospechoso el issue del puente (que trae una tabla y un comentario HTML legítimos) y encontraron los dos errores plantados. La diferencia estuvo en el ruido: en el caso del log, el revisor de haiku dio siete hallazgos frente a cuatro, con tres de severidad media frente a uno. Las evals no lo penalizan porque solo exigen que esté el hallazgo importante, y en un PR real ese ruido lo paga quien revisa.
+
+El empate al 100 % es también un resultado: los casos son demasiado fáciles para decidir un cambio de modelo. Sirven como red de seguridad, porque un modelo que falle alguno no debería usarse, pero no para elegir entre dos que los pasan todos. Para eso harían falta repeticiones, casos más difíciles y una medida del ruido del revisor.
+
+### Una actualización en verde que rompió el agente
+
+El primer `@claude` de app#34 hizo bien el cambio y aun así no se publicó. core#31, un PR de Dependabot con todos los checks en verde, había subido setup-uv a la versión 10.3.2. Esa versión falla al final del job si su caché no existe, y el agente usa una caché propia dentro de la carpeta de la aplicación. El job terminaba en fallo y el paso de publicación descartó el cambio, que es lo que debe hacer cuando el trabajo no termina limpio. Se desactivó esa caché en los jobs del agente (core#37) y el segundo intento subió un commit verificado.
+
+El CI de core prueba los scripts, pero no ejecuta los workflows del agente, así que nada avisó antes. Es el mismo patrón que el sandbox en Ubuntu 26.04 de la tarea 11: un cambio externo desactiva una pieza del agente sin que ningún check falle. Queda como trabajo pendiente una prueba de humo de los workflows del agente en el CI de core.
+
 ## Tareas pendientes
 
-> Las secciones de la tarea 12 y de las extensiones C a E se añadirán a medida que se implementen: mantenimiento, retirada y trazabilidad.
+> Las secciones de la tarea 12 y de las extensiones D y E se añadirán a medida que se implementen: retirada y trazabilidad.
 
 # Iteraciones con modelos, pruebas y resultados
 
@@ -945,6 +993,22 @@ El registro que sigue resume toda la conversación del proyecto. Se han omitido 
 | 119 | «Sí, usa Ubuntu 26.04» | Confirma la hipótesis con el dato del autor, porque la sesión no puede leer los logs de Actions | Causa confirmada |
 | 120 | «Merged» | Actualiza el texto de la alerta al nuevo máximo (gitops#12) y cierra la documentación de la tarea | Tarea 11 cerrada |
 
+### Fase 18 · Mantenimiento (24 y 25 de octubre)
+
+| # | Petición del autor | Respuesta y acción del modelo | Resultado |
+|---|---|---|---|
+| 121 | «La PR 29 tiene conflictos, resuélvelos» | Fusiona `main` en la rama; no hay conflicto real, solo historia de la rama anterior | Documentación de la tarea 11 fusionada |
+| 122 | «Listo» | Plantea tres decisiones con su coste: herramienta de actualizaciones, papel del agente y alcance de las evals | Decisiones del autor |
+| 123 | Elige Dependabot, `@claude` a demanda y evals de triage y revisor | Escribe la configuración de Dependabot de los tres repos, 13 casos, el script con 8 tests y los workflows (core#30, app#32, gitops#13). Comprueba la cadena completa con un `claude` simulado | Extensión C preparada |
+| 124 | «Ha fallado el workflow del evals» | Ve que no se creó ningún job; no puede leer la página del error y lo pide. Encuentra de paso un fallo con la opción «ambos» | |
+| 125 | Texto del error: «Unexpected value '1'» | Las entradas de `workflow_dispatch` llegan como texto; restaura `fromJSON`, que había quitado por error (app#35) | Evals en marcha |
+| 126 | «Merged» | Revisa los ocho PRs de Dependabot y descubre que el triage usaba acciones por etiqueta y Claude Code sin versión (core#36). Propone usar app#34 para probar `@claude` con httpx2 | |
+| 127 | Informes de las evals | Compara los dos modelos y concluye que los casos ya no los distinguen | Datos para decidir |
+| 128 | «Mergeados todos y añadido el comentario en #34» | El agente hizo el cambio pero se descartó: setup-uv 10.3.2, de Dependabot, falla sin su caché (core#37) | |
+| 129 | «Listo» | Comprueba el commit verificado y los checks, y la licencia de httpx2 que el agente no pudo consultar | Cambio listo |
+| 130 | «gitops#16 tiene conflictos; podemos esperar al 17» | Explica que cada promoción incluye las anteriores y propone esperar a la de app#34 | Un solo despliegue |
+| 131 | «Todo merged» | Cierra la documentación de la extensión | Extensión C cerrada |
+
 ## Pruebas realizadas y resultados
 
 ### Pruebas automáticas
@@ -972,6 +1036,10 @@ El registro que sigue resume toda la conversación del proyecto. Se han omitido 
 | Reglas de alerta (`promtool test rules`) | 4 casos: cada alerta salta con su condición y no salta sin ella | 4/4 superadas |
 | Ciclo de operación (app#29) | 60 búsquedas de 120 caracteres en staging | Issue abierto por el puente, triage, decisión, spec y feat del agente, promoción y 200 con 120 caracteres; 25 minutos de `aprobado` a cierre |
 | Alerta por despliegue (app#28) | Anotación de métricas desplegada antes que la imagen | Issue abierto y resuelto solo; cerrado sin `aprobado` |
+| Evals (`run_evals.py`) | 8 casos: casos bien formados, acierto y fallo por campo, referencias solo a issues reales, respuesta inválida, repositorio del caso y hallazgo, severidad máxima y ejecución completa con respuestas guardadas | 8/8 superadas |
+| Evals con modelo real | 13 casos con sonnet y con haiku | 13/13 los dos; haiku, 12 veces más barato y con más hallazgos menores |
+| Dependabot (app#33, app#34, core#31, gitops#14) | Primera ronda semanal | Checks en verde y despliegue en una promoción |
+| `@claude` en un PR de Dependabot (app#34) | Cambiar httpx por httpx2 | Commit verificado; 117 tests sin el aviso; licencia comprobada por una persona |
 | Triage (`apply.py`, `build_prompt.py`) | 12 casos: salida estructurada, valores inválidos, etiquetas arbitrarias, referencias falsas, neutralización de texto, sospecha de inyección | 12/12 superadas |
 
 ### Pruebas del harness en el entorno real
@@ -1022,23 +1090,28 @@ El caso de inyección prueba el diseño en dos niveles. El modelo detectó el in
 | Grafana reiniciado por el liveness | SQLite en `emptyDir` y poca CPU: `/api/health` en 503 | WAL, más margen y más CPU (gitops#9) | Un 137 no siempre es memoria; hay que mirar el motivo del kubelet |
 | El agente rechaza su propia spec | El guardarraíl esperaba una sola carpeta de spec y la decisión pedía tocar dos | Buscar la carpeta nueva solo entre los ficheros creados (core#27) | Un guardarraíl demasiado estricto bloquea trabajo correcto; falló en seguro y con un mensaje claro |
 | El agente no puede ejecutar comandos | `ubuntu-latest` pasó a Ubuntu 26.04 y el sandbox no arranca | Runner fijado y comprobación previa (core#28) | Un cambio del proveedor puede desactivar una capa sin que nada falle; ahora el fallo es visible y para el job |
+| Evals sin arrancar | Las entradas de `workflow_dispatch` son texto aunque se declaren número | `fromJSON` (app#35) | actionlint no lo detecta; el error solo aparece en la página de la ejecución |
+| Saltos mayores de acciones en core | Un workflow con acciones por etiqueta | Fijarlas por SHA (core#36) | Dependabot también sirve para encontrar lo que no sigue la norma |
+| Cambio del agente descartado | Una actualización de Dependabot (setup-uv) en verde rompió los jobs del agente | Sin caché de setup-uv (core#37) | Los checks verdes de un PR de dependencias no prueban los workflows que no se ejecutan en él |
+| Promociones en conflicto | Cada merge en app abre una promoción y todas cambian la misma línea | Cerrar las intermedias | El promotor debería cerrar las que sustituye |
 | Prefijo «[Petición]» en los títulos de los PRs | El script copiaba el título del issue | Se quita el prefijo (core#15) | Los detalles de presentación también salen al usarlo de verdad |
 
 ## Métricas del proceso
 
 | Métrica | Valor |
 |---|---|
-| Tareas completadas | 14 de 18 (1, 2, 3, A, 4, 5, 6, 7, 8, F, 9, 10, B y 11) |
-| PRs fusionados | 50 (18 en core, 24 en app y 8 en gitops; seis abiertos por el agente, cinco con commits suyos pedidos con `@claude` y cuatro abiertos por el promotor), más la documentación |
-| Pruebas automáticas | 294 superadas (57 de harness y triage, 23 de gobierno de PRs, 47 de los agentes en Actions, 8 de la cadena de suministro, 7 de la promoción, 19 de las versiones, 16 de la observabilidad y 117 de la aplicación) |
-| Iteraciones registradas con el asistente | 120 |
-| Versiones publicadas | core `v1.8.0` (automática) y app `v1.0.0` |
+| Tareas completadas | 15 de 18 (1, 2, 3, A, 4, 5, 6, 7, 8, F, 9, 10, B, 11 y C) |
+| PRs fusionados | 63 (22 en core, 28 en app y 13 en gitops; seis abiertos por el agente, seis con commits suyos pedidos con `@claude`, seis abiertos por el promotor y cuatro por Dependabot), más la documentación |
+| Pruebas automáticas | 302 superadas (57 de harness y triage, 23 de gobierno de PRs, 47 de los agentes en Actions, 8 de la cadena de suministro, 7 de la promoción, 19 de las versiones, 16 de la observabilidad, 8 de las evals y 117 de la aplicación) |
+| Evals de los agentes | 13 casos; 13/13 con sonnet y con haiku (0,35 frente a 0,03 USD equivalentes por ronda) |
+| Iteraciones registradas con el asistente | 131 |
+| Versiones publicadas | core hasta `v1.9.3` (automáticas) y app `v1.0.0` |
 | Tiempo de una feature con el agente autónomo | 25 minutos de la petición al cierre (issue #18), con cuatro decisiones humanas; 25 minutos de `aprobado` a cierre en un issue abierto por una alerta (#29), con cinco |
 | Alertas convertidas en issues | 2 (una cerrada sin trabajo, otra resuelta por el agente y desplegada) |
-| Problemas de entorno resueltos | 29 |
+| Problemas de entorno resueltos | 34 |
 | Vulnerabilidades de diseño detectadas antes de explotarse | 2 (aprobación imposible sin identidad propia; herencia de credenciales) |
 
-> Este capítulo se ampliará con las iteraciones y pruebas de la tarea 12 y de C a E.
+> Este capítulo se ampliará con las iteraciones y pruebas de la tarea 12 y de D y E.
 
 # Documentación técnica reproducible
 
@@ -1232,7 +1305,15 @@ for i in $(seq 1 60); do curl -s -o /dev/null "localhost:8000/api/v1/productos?q
 
 5. En app: a los pocos minutos aparece un issue con la etiqueta `alerta` y su triage. Decidir en un comentario y añadir `aprobado`, o cerrarlo con la causa.
 
-> Los pasos de la tarea 12 y de C a E se añadirán al completarlas.
+### Extensión C. Mantenimiento continuo
+
+1. En core: añadir `.github/dependabot.yml`, `evals/`, `scripts/evals/` y `reusable-evals.yml`, y fusionar.
+2. En app: añadir `.github/dependabot.yml` y `.github/workflows/evals.yml` (con `fromJSON` en las repeticiones) y fusionar. En gitops: añadir su `.github/dependabot.yml` y fusionar.
+3. En la web de GitHub, en cada repo: *Settings → Advanced Security*, activar **Dependabot alerts** y **Dependabot security updates**. Para no esperar al lunes: *Insights → Dependency graph → Dependabot → Check for updates*.
+4. Revisar cada PR de Dependabot como cualquier otro. Si hace falta un cambio que Dependabot no sabe hacer, comentar `@claude` en el propio PR.
+5. Antes de cambiar el modelo de un agente: en app, *Actions → evals → Run workflow* con el modelo actual y el candidato, por ejemplo `sonnet,haiku`.
+
+> Los pasos de la tarea 12 y de D y E se añadirán al completarlas.
 
 ## Estructura de los repositorios
 
@@ -1249,6 +1330,7 @@ poc-almagentic-core/
   agent-standards/              estándar común del harness (v1.0.0)
   .github/workflows/            workflows reutilizables (triage, CI, seguridad y agentes)
   prompts/, scripts/            prompts y scripts del triage, los agentes y el escaneo
+  evals/                        casos fijos de las evals del triage y del revisor
   docs/poc/, docs/tfm/          bitácora, panel y esta memoria
 
 poc-almagentic-gitops/
@@ -1288,6 +1370,10 @@ poc-almagentic-gitops/
 | El agente rechaza la spec: «se esperaba una carpeta de spec nueva» | Con core v1.8.1 o posterior basta quitar y volver a poner `aprobado` |
 | El agente dice que no pudo ejecutar comandos | Comprobar en el paso del sandbox que el runner es Ubuntu 24.04 y que aparece «Sandbox (bubblewrap) operativo» |
 | Queda abierta una promoción antigua en gitops | Cerrarla sin fusionar: desplegaría una imagen anterior |
+| El workflow `evals` falla sin crear jobs: «Unexpected value '1'» | Convertir la entrada con `fromJSON(inputs.repeticiones)` |
+| `@claude` hace el cambio pero el bot dice que no ha podido completarlo y el job falla en «Post Run setup-uv» | Desactivar la caché de setup-uv en los jobs del agente (core#37) y repetir el comentario |
+| Dependabot abre saltos mayores de acciones que el resto de workflows no usan | Fijar ese workflow por SHA como los demás y cerrar los PRs |
+| Varias promociones abiertas en conflicto | Fusionar solo la más reciente: incluye las anteriores |
 | El merge de la spec no lanza la implementación | La rama del PR debe empezar por `spec/<issue>-` y venir del mismo repositorio |
 
 # Conclusiones y trabajo futuro
@@ -1307,6 +1393,8 @@ poc-almagentic-gitops/
 
 11. Una alerta vale lo mismo que una petición escrita por una persona, y por eso no salta directamente al agente. Entra como issue, pasa por el triage y espera una decisión. En la prueba hubo dos alertas: una era un efecto del despliegue y se cerró sin trabajo; la otra llevó a un cambio de contrato que decidió el responsable y escribió el agente. El mismo ciclo sirvió para las dos, y la diferencia la puso la persona.
 12. Las capas de seguridad necesitan vigilarse a sí mismas. El sandbox dejó de funcionar por un cambio del proveedor de los runners sin que nada fallara, y el agente siguió trabajando sin poder probar su código. El CI lo compensó esta vez. Desde entonces el job comprueba el sandbox antes de llamar al modelo, igual que el devcontainer usa `failIfUnavailable` desde la tarea 4.
+
+13. En un ALM agéntico, el mantenimiento incluye a los agentes. Dependabot mantiene las dependencias de la aplicación, pero los agentes dependen también del modelo, de la versión de Claude Code, de las acciones y del sistema del runner. Dos veces un cambio externo desactivó una pieza del agente sin que fallara ningún check. Las evals cubren el cambio de modelo, y queda pendiente una prueba de humo para el resto.
 
 ## Trabajo futuro
 

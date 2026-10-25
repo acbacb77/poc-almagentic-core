@@ -1,0 +1,279 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Mantenimiento continuo",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "external": {
+          "label": "Persona o entrada"
+        },
+        "backend": {
+          "label": "Agente o proceso"
+        },
+        "security": {
+          "label": "Control o aprobación"
+        },
+        "frontend": {
+          "label": "Artefacto en GitHub"
+        },
+        "messagebus": {
+          "label": "Promoción en gitops"
+        }
+      }
+    }
+  },
+  "components": [
+    {
+      "id": "dependabot",
+      "type": "backend",
+      "label": "Dependabot",
+      "sublabel": "cada lunes",
+      "pos": [
+        40,
+        50
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "prdeps",
+      "type": "frontend",
+      "label": "PR de dependencias",
+      "sublabel": "paquetes, imágenes, acciones",
+      "pos": [
+        260,
+        50
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "checks",
+      "type": "security",
+      "label": "Checks obligatorios",
+      "sublabel": "CI y seguridad",
+      "pos": [
+        480,
+        50
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "merge",
+      "type": "security",
+      "label": "Aprobación humana",
+      "sublabel": "merge",
+      "pos": [
+        700,
+        50
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "promo",
+      "type": "messagebus",
+      "label": "Promoción",
+      "sublabel": "a staging",
+      "pos": [
+        920,
+        50
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "persona",
+      "type": "external",
+      "label": "Persona",
+      "sublabel": "pide un arreglo",
+      "pos": [
+        40,
+        190
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "agente",
+      "type": "backend",
+      "label": "Agente",
+      "sublabel": "commit verificado",
+      "pos": [
+        260,
+        190
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "candidato",
+      "type": "external",
+      "label": "Modelo candidato",
+      "sublabel": "p. ej. haiku",
+      "pos": [
+        40,
+        330
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "evals",
+      "type": "backend",
+      "label": "Evals",
+      "sublabel": "13 casos fijos",
+      "pos": [
+        260,
+        330
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "validador",
+      "type": "security",
+      "label": "Validadores reales",
+      "sublabel": "triage y revisor",
+      "pos": [
+        480,
+        330
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "informe",
+      "type": "frontend",
+      "label": "Informe",
+      "sublabel": "acierto, coste, ruido",
+      "pos": [
+        700,
+        330
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "decision",
+      "type": "security",
+      "label": "Decisión humana",
+      "sublabel": "cambiar o no",
+      "pos": [
+        920,
+        330
+      ],
+      "size": [
+        140,
+        56
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Actualizaciones de dependencias",
+      "wraps": [
+        "dependabot",
+        "prdeps",
+        "checks",
+        "merge",
+        "promo",
+        "persona",
+        "agente"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Antes de cambiar de modelo",
+      "wraps": [
+        "candidato",
+        "evals",
+        "validador",
+        "informe",
+        "decision"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "e1",
+      "from": "dependabot",
+      "to": "prdeps"
+    },
+    {
+      "id": "e2",
+      "from": "prdeps",
+      "to": "checks"
+    },
+    {
+      "id": "e3",
+      "from": "checks",
+      "to": "merge",
+      "label": "en verde"
+    },
+    {
+      "id": "e4",
+      "from": "merge",
+      "to": "promo"
+    },
+    {
+      "id": "e5",
+      "from": "persona",
+      "to": "agente",
+      "label": "@claude"
+    },
+    {
+      "id": "e6",
+      "from": "agente",
+      "to": "prdeps"
+    },
+    {
+      "id": "e7",
+      "from": "candidato",
+      "to": "evals"
+    },
+    {
+      "id": "e8",
+      "from": "evals",
+      "to": "validador",
+      "label": "mismos prompts"
+    },
+    {
+      "id": "e9",
+      "from": "validador",
+      "to": "informe"
+    },
+    {
+      "id": "e10",
+      "from": "informe",
+      "to": "decision"
+    }
+  ]
+}
