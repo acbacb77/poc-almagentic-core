@@ -163,8 +163,15 @@ FOOTER_PR = (
 
 
 def pr_text(
-    phase: str, issue: int, issue_title: str, output_path: str, spec_dir: str
+    phase: str,
+    issue: int,
+    issue_title: str,
+    output_path: str,
+    spec_dir: str,
+    breaking: bool = False,
 ) -> tuple[str, str]:
+    """Título y cuerpo del PR. `breaking`: la petición retira algo (tipo:retirada), así que la
+    implementación es un cambio incompatible y release.py debe subir la versión mayor."""
     # Sin el prefijo de la plantilla de peticiones ("[Petición] ") y con mayúscula inicial.
     plain = re.sub(r"^\s*\[[^\]]{1,30}\]\s*", "", str(issue_title or "")) or str(
         issue_title or ""
@@ -176,7 +183,7 @@ def pr_text(
         link = f"Refs #{issue}"
         next_step = "Al fusionar este PR, el agente hará el plan, las tareas y la implementación en otro PR."
     else:
-        title = f"feat: {title_text} (#{issue})"
+        title = f"feat{'!' if breaking else ''}: {title_text} (#{issue})"
         intro = f"Implementación de la petición #{issue} según `{spec_dir}/spec.md`: plan, tareas y código, escritos por el agente con Spec Kit."
         link = f"Closes #{issue}"
         next_step = "Para pedir cambios al agente, comenta `@claude` en este PR."
@@ -184,7 +191,10 @@ def pr_text(
     body = [intro, ""]
     if summary:
         body += ["## Resumen del agente", "", summary, ""]
-    body += [next_step, "", link, "", "---", FOOTER_PR]
+    body += [next_step, "", link, ""]
+    if breaking and phase != "spec":
+        body += [f"BREAKING CHANGE: retira lo que pide la petición #{issue}.", ""]
+    body += ["---", FOOTER_PR]
     return title, "\n".join(body)
 
 
@@ -259,6 +269,7 @@ def main(argv: list[str]) -> int:
     sub.choices["prompt"].add_argument("--spec-dir", default="")
     sub.choices["pr"].add_argument("--title-file", required=True)
     sub.choices["pr"].add_argument("--body-file", required=True)
+    sub.choices["pr"].add_argument("--breaking", action="store_true")
     p = sub.add_parser("names")
     p.add_argument("phase")
     p.add_argument("args", nargs="+")
@@ -300,7 +311,9 @@ def main(argv: list[str]) -> int:
             print(f"{f}: en la fase spec solo se escribe en specs/")
         return 1 if bad else 0
     if a.cmd == "pr":
-        title, body = pr_text(a.phase, a.issue, a.title, a.output, a.spec_dir)
+        title, body = pr_text(
+            a.phase, a.issue, a.title, a.output, a.spec_dir, a.breaking
+        )
         Path(a.title_file).write_text(title, encoding="utf-8")
         Path(a.body_file).write_text(body, encoding="utf-8")
         return 0

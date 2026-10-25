@@ -340,8 +340,10 @@ jobs:
           fi
           cat "$W/api.err"
 
+          # Una retirada rompe a quien la use: el PR lleva «!» y BREAKING CHANGE para que la versión suba la mayor.
+          ruptura=$(jq -r 'if any(.labels[]?; .name == "tipo:retirada") then "--breaking" else "" end' "$W/issue.json")
           python3 "$F" pr "$PHASE" "$N" "$(jq -r .title "$W/issue.json")" "$W/claude-output.json" "$SPEC_DIR" \
-            --title-file "$W/titulo.txt" --body-file "$W/cuerpo.md"
+            --title-file "$W/titulo.txt" --body-file "$W/cuerpo.md" $ruptura
           url=$(gh pr create --repo "$REPO" --base "$BASE_BRANCH" --head "$BRANCH" \
             --title "$(cat "$W/titulo.txt")" --body-file "$W/cuerpo.md")
           report opened "$W/claude-output.json" --pr "$url"
