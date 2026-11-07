@@ -1699,8 +1699,8 @@ const TASKS = [
   "id": "E",
   "title": "Trazabilidad y cuadro de mando del proceso",
   "phase": "Gobierno",
-  "status": "next",
-  "desc": "Cada release enlaza petición, decisión, spec, PRs, revisiones, checks y despliegue. Un cuadro de mando muestra en qué fase está cada petición, qué espera a una persona y qué ha fallado.",
+  "status": "done",
+  "desc": "Cada Release enlaza petición, decisión, spec, PRs, revisiones, checks y despliegue. La aplicación Flujo ALM (localhost:8088) muestra en vivo en qué etapa está cada petición, qué te toca y qué ha fallado; Grafana añade las métricas y alertas del proceso.",
   "alm": [
    "11",
    "12"
@@ -1734,7 +1734,13 @@ const TASKS = [
     ]
    ],
    [
-    "Panel «Flujo ALM» (artifact) y su generador",
+    "Primera Release con trazabilidad: v2.0.0",
+    "usuario",
+    true,
+    []
+   ],
+   [
+    "Panel «Flujo ALM» como página publicada (foto de datos; tres diseños)",
     "claude",
     true,
     [
@@ -1745,16 +1751,26 @@ const TASKS = [
     ]
    ],
    [
-    "Primera Release con trazabilidad: v2.0.0",
-    "usuario",
+    "Flujo ALM como aplicación del clúster, en vivo con ETag",
+    "claude",
     true,
-    []
+    [
+     {
+      "label": "gitops#29",
+      "href": "https://github.com/acbacb77/poc-almagentic-gitops/pull/29"
+     }
+    ]
    ],
    [
-    "Decidir cómo se refresca Flujo ALM y cerrar la tarea",
-    "usuario",
-    false,
-    []
+    "El revisor lee las decisiones; la trazabilidad distingue PRs propios",
+    "claude",
+    true,
+    [
+     {
+      "label": "core#43",
+      "href": "https://github.com/acbacb77/poc-almagentic-core/pull/43"
+     }
+    ]
    ]
   ]
  },
