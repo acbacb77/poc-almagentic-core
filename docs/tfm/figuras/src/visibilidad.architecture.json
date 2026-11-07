@@ -1,0 +1,237 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Visibilidad del proceso",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "external": {
+          "label": "Persona o entrada"
+        },
+        "backend": {
+          "label": "Agente o proceso"
+        },
+        "security": {
+          "label": "Control o aprobación"
+        },
+        "frontend": {
+          "label": "Artefacto en GitHub"
+        },
+        "cloud": {
+          "label": "Clúster"
+        }
+      }
+    }
+  },
+  "components": [
+    {
+      "id": "argo",
+      "type": "cloud",
+      "label": "Argo CD",
+      "sublabel": "aplicaciones",
+      "pos": [
+        40,
+        50
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "github",
+      "type": "external",
+      "label": "GitHub",
+      "sublabel": "app, core y gitops",
+      "pos": [
+        40,
+        190
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "colector",
+      "type": "backend",
+      "label": "Colector",
+      "sublabel": "estado_alm.py",
+      "pos": [
+        270,
+        50
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "prom",
+      "type": "cloud",
+      "label": "Prometheus",
+      "sublabel": "métricas del proceso",
+      "pos": [
+        500,
+        50
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "grafana",
+      "type": "frontend",
+      "label": "Grafana",
+      "sublabel": "Proceso ALM",
+      "pos": [
+        730,
+        50
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "alertas",
+      "type": "security",
+      "label": "Alertas del proceso",
+      "sublabel": "sin issue",
+      "pos": [
+        960,
+        50
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "flujo",
+      "type": "backend",
+      "label": "Flujo ALM",
+      "sublabel": "ETag cada 30 s",
+      "pos": [
+        270,
+        190
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "panel",
+      "type": "frontend",
+      "label": "Panel en vivo",
+      "sublabel": "matriz y cola",
+      "pos": [
+        500,
+        190
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "persona",
+      "type": "security",
+      "label": "Persona",
+      "sublabel": "qué le toca",
+      "pos": [
+        730,
+        190
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "traza",
+      "type": "backend",
+      "label": "trazabilidad.py",
+      "sublabel": "al publicar",
+      "pos": [
+        270,
+        330
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "release",
+      "type": "frontend",
+      "label": "Release",
+      "sublabel": "tabla y JSON",
+      "pos": [
+        500,
+        330
+      ],
+      "size": [
+        150,
+        56
+      ]
+    }
+  ],
+  "boundaries": [],
+  "connections": [
+    {
+      "id": "e1",
+      "from": "argo",
+      "to": "colector"
+    },
+    {
+      "id": "e2",
+      "from": "github",
+      "to": "colector"
+    },
+    {
+      "id": "e3",
+      "from": "colector",
+      "to": "prom"
+    },
+    {
+      "id": "e4",
+      "from": "prom",
+      "to": "grafana"
+    },
+    {
+      "id": "e5",
+      "from": "grafana",
+      "to": "alertas"
+    },
+    {
+      "id": "e6",
+      "from": "github",
+      "to": "flujo"
+    },
+    {
+      "id": "e7",
+      "from": "flujo",
+      "to": "panel"
+    },
+    {
+      "id": "e8",
+      "from": "panel",
+      "to": "persona"
+    },
+    {
+      "id": "e9",
+      "from": "github",
+      "to": "traza"
+    },
+    {
+      "id": "e10",
+      "from": "traza",
+      "to": "release"
+    }
+  ]
+}

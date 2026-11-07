@@ -809,9 +809,35 @@ Al preparar la versión apareció un tercer problema: el PR de la retirada se ti
 
 El revisor automático marcó en las dos implementaciones, con hallazgos altos, cambios que el responsable había autorizado en el mismo PR. No leía los comentarios. Se fusionaron igualmente, con su 🔴 y con bypass, y eso es peligroso: si el revisor avisa de cosas ya decididas, la gente aprende a no leerlo. core#43 le da los comentarios de los responsables como contexto y añade a las evals un caso con una decisión autorizada.
 
+## Extensión E: trazabilidad y visibilidad del proceso
+
+Con agentes trabajando solos durante buena parte del ciclo, la persona responsable necesita dos cosas que un ALM tradicional resuelve con reuniones: saber en qué punto está cada petición y qué espera de ella, y poder reconstruir después de dónde salió cada cambio que llegó a producción. La extensión E responde a las dos. Empezó como un informe de trazabilidad por versión y el responsable la amplió a un cuadro de mando de todo el proceso, con preguntas concretas: ¿quién abrió la petición, una persona o una alerta? ¿Qué falta, contestar o solo poner `aprobado`? ¿En qué estado están la spec y el código? ¿Están en verde sus checks? ¿Ha llegado a staging? ¿Ha hecho falta arreglar algo en core?
+
+![Figura 14. Visibilidad del proceso: el colector y Flujo ALM leen GitHub (solo lectura) y Argo CD; la trazabilidad se genera al publicar cada versión.](figuras/visibilidad.png)
+
+El responsable decidió tres cosas: el cuadro de mando vive en el clúster, porque es lo único que ve a la vez GitHub y Argo CD; la trazabilidad va dentro de cada Release y se genera al publicarla; y los fallos del proceso se ven como alertas en Grafana, pero no abren issues, porque son fallos de la plataforma y no peticiones de producto.
+
+| Pieza | Repositorio | Qué hace |
+|---|---|---|
+| `trazabilidad.py` | core (core#39) | Al publicar una versión reconstruye cada PR que entra: origen de la petición (persona o alerta), quién puso `aprobado` y cuándo, la spec, quién escribió el código y cuántas rondas de `@claude` hubo, el veredicto del revisor automático, la aprobación humana o el bypass, los checks obligatorios y la promoción que lo llevó a staging. Añade una tabla a las notas de la Release y adjunta `trazabilidad.json`. Si falla, la versión se publica igual. 5 tests |
+| Colector y panel «Proceso ALM» | gitops (gitops#22) | `estado_alm.py` publica en Prometheus la fase de cada petición, lo que espera a una persona, los workflows en rojo en `main`, si staging va por detrás, las promociones sustituidas, la caducidad del token y métricas DORA aproximadas. Siete alertas con `ambito="proceso"` van a un receptor vacío de Alertmanager, así que no pasan por el puente. 10 tests y 4 casos de promtool |
+| Flujo ALM | gitops (gitops#29) | Aplicación web en `localhost:8088`. Cada petición es una fila y sus ocho etapas (petición, triage, decisión, spec, código, imagen, promoción y staging) son columnas alineadas, de modo que se puede leer una etapa de arriba abajo. Arriba, la cola de «Lo que te toca» con acciones concretas; al pulsar una casilla, una ficha con qué se hizo, quién, cuándo, los checks uno a uno y qué falta. Lee GitHub cada 30 segundos con peticiones condicionales. 3 tests |
+
+### Cómo se llegó a Flujo ALM
+
+El primer intento fue el panel de Grafana. Funcionaba como métricas, pero no respondía a la pregunta del responsable: quería ver el flujo entero de cada petición como una pipeline. La segunda versión fue una página publicada en claude.ai, alimentada por una foto de los datos que generaba un script con la API de GitHub. Hubo tres diseños: vías con estaciones, un plano de metro con las decisiones humanas como transbordos y, finalmente, una matriz con las etapas alineadas en columnas, que es la que se quedó.
+
+El límite de esa página era que no podía estar en vivo: el visor bloquea cualquier llamada a `api.github.com` y no había conector de GitHub. Las alternativas eran una tarea programada que refrescara la foto, que el responsable descartó, o un servidor MCP local, que exigía instalar herramientas. El responsable pidió entonces que fuera una aplicación del clúster desplegada por GitOps, como el resto. Así se hizo, con el mismo patrón que el puente y el exportador: imagen oficial de Python fijada por digest, código en un ConfigMap, sin root y con el sistema de ficheros de solo lectura.
+
+Una vuelta completa necesita unas 200 consultas a la API. Cada 30 segundos, eso agotaría la cuota del token en menos de una hora. Con peticiones condicionales (una respuesta 304 no gasta cuota) y guardando para siempre las comparaciones entre dos SHA, las vueltas siguientes cuestan unas 9 consultas.
+
+### Lo que enseñó la trazabilidad
+
+La primera versión con trazabilidad fue la v2.0.0 de app, con 13 PRs. La tabla mostró algo que nadie había visto: varios PRs del agente y del promotor se fusionaron sin aprobación vigente, con el bypass del administrador. En todos, un commit posterior (una ronda de `@claude`, una actualización del promotor) había descartado la aprobación anterior, o no se llegó a aprobar. El merge seguía haciéndolo una persona, así que el control humano existía, pero no quedaba registrado como aprobación. También mostró dos PRs fusionados con el revisor automático en rojo, por hallazgos sobre cambios que el responsable había autorizado en el propio PR; eso llevó a que el revisor lea las decisiones de los responsables (core#43), como se cuenta en la extensión D.
+
 ## Tareas pendientes
 
-> Las secciones de la tarea 12 y de la extensión E (trazabilidad y cuadro de mando del proceso) se añadirán al cerrarlas.
+> La sección de la tarea 12 (guion y ensayo de la demo) se añadirá al cerrarla.
 
 # Iteraciones con modelos, pruebas y resultados
 
@@ -1079,6 +1105,22 @@ Las iteraciones de la extensión E, intercaladas con estas el mismo día, se rec
 | 143 | «Listo» | Revisa la v2.0.0 y su trazabilidad: fusiones con el revisor en rojo y bypass, y dos fugas pendientes en v1 | |
 | 144 | «1 y 2 ok; cerrar la D, la E no» | Abre core#43 y cierra la documentación de la extensión | Extensión D cerrada |
 
+### Fase 20 · Trazabilidad y visibilidad del proceso (25 de octubre a 7 de noviembre)
+
+Estas iteraciones ocurrieron intercaladas con las de la fase 19.
+
+| # | Petición del autor | Respuesta y acción del modelo | Resultado |
+|---|---|---|---|
+| 145 | «Listo» (con v2 desplegada) | Plantea tres decisiones para la extensión E | Decisiones del autor |
+| 146 | Grafana con colector en el clúster, trazabilidad en la Release y alertas sin issue | Escribe el colector, el panel y las alertas del proceso (gitops#22), y `trazabilidad.py` (core#39, app#39). Los prueba contra GitHub y encuentra los merges con bypass | Piezas listas |
+| 147 | «De momento no salen datos» | Da los comandos para revisar la sincronización, el pod, los logs y las métricas | |
+| 148 | «No es lo que esperaba: quiero ver el flujo entero, como una pipeline» | Escribe el generador del flujo por etapas y publica la primera página, con los datos guardados en ella | Flujo ALM, primera versión |
+| 149 | «¿El panel no puede conectarse directamente con la API de GitHub?» | Explica el bloqueo del visor, busca un conector de GitHub (no hay) y plantea alternativas | |
+| 150 | «Usa frontend-design para otra versión» | Rediseña la página como un plano de metro, con las decisiones humanas como transbordos. Propone una tarea programada, que el autor rechaza | |
+| 151 | «Dale otra vuelta completamente» | Rediseña la página como una matriz de etapas, con la cola de lo que te toca y una ficha lateral | Diseño final |
+| 152 | «Quiero que sea una app conectada a GitHub y desplegada con GitOps» | Convierte el generador en una aplicación con caché por ETag y la prueba en local contra GitHub (gitops#29). Ve que había subido `__pycache__` a gitops y lo corrige | Flujo ALM en vivo |
+| 153 | «Déjala y continuamos» | Mantiene la página como foto y cierra la documentación de la extensión | Extensión E cerrada |
+
 ## Pruebas realizadas y resultados
 
 ### Pruebas automáticas
@@ -1110,6 +1152,9 @@ Las iteraciones de la extensión E, intercaladas con estas el mismo día, se rec
 | Evals con modelo real | 13 casos con sonnet y con haiku | 13/13 los dos; haiku, 12 veces más barato y con más hallazgos menores |
 | Dependabot (app#33, app#34, core#31, gitops#14) | Primera ronda semanal | Checks en verde y despliegue en una promoción |
 | `@claude` en un PR de Dependabot (app#34) | Cambiar httpx por httpx2 | Commit verificado; 117 tests sin el aviso; licencia comprobada por una persona |
+| Trazabilidad (`trazabilidad.py`) | 5 casos y la historia real de app (`v1.0.0..main`) | La v2.0.0 se publica con la tabla y el JSON; detecta merges con bypass y con el revisor en rojo |
+| Colector del proceso (`estado_alm.py`) | 10 casos, 4 de promtool y una lectura real de GitHub | Fases, pendientes, workflows en rojo, staging y DORA coherentes con GitHub |
+| Flujo ALM (`flujo_alm.py`) | 3 casos y la aplicación arrancada en local contra GitHub | Matriz y ficha correctas; con ETag, unas 9 consultas por vuelta tras la primera |
 | Retirada de v1 (app#38 y app#42) | v2, cabeceras de obsolescencia y 410 en staging | Respuestas correctas, 148 tests en la app, versión 2.0.0 con la retirada como cambio incompatible |
 | Contradicción en una spec (app#42) | Spec que pide no tocar tests que dependen de lo que se retira | El agente no rompe su regla, deja los tests en rojo y lo explica; una persona lo autoriza |
 | Triage (`apply.py`, `build_prompt.py`) | 12 casos: salida estructurada, valores inválidos, etiquetas arbitrarias, referencias falsas, neutralización de texto, sospecha de inyección | 12/12 superadas |
@@ -1162,6 +1207,8 @@ El caso de inyección prueba el diseño en dos niveles. El modelo detectó el in
 | Grafana reiniciado por el liveness | SQLite en `emptyDir` y poca CPU: `/api/health` en 503 | WAL, más margen y más CPU (gitops#9) | Un 137 no siempre es memoria; hay que mirar el motivo del kubelet |
 | El agente rechaza su propia spec | El guardarraíl esperaba una sola carpeta de spec y la decisión pedía tocar dos | Buscar la carpeta nueva solo entre los ficheros creados (core#27) | Un guardarraíl demasiado estricto bloquea trabajo correcto; falló en seguro y con un mensaje claro |
 | El agente no puede ejecutar comandos | `ubuntu-latest` pasó a Ubuntu 26.04 y el sandbox no arranca | Runner fijado y comprobación previa (core#28) | Un cambio del proveedor puede desactivar una capa sin que nada falle; ahora el fallo es visible y para el job |
+| Panel sin datos en vivo | El visor de claude.ai bloquea la API de GitHub | Aplicación del clúster (gitops#29) | Lo que necesita credenciales y datos vivos va donde ya están las credenciales |
+| Bytecode en gitops | `git add -A` sin `.gitignore` y sin check `governance` | `.gitignore` (gitops#29) | Los repos sin agente también necesitan la red básica |
 | Prueba de humo atada a `/api/v1` | El pipeline de core suponía una ruta de la app | Sin exigir estado (core#41) | La plataforma tampoco debe depender del contrato de una versión concreta |
 | Versión menor para una retirada | El PR se tituló `feat:` | `docs!:` y `feat!:` automático en retiradas (app#43, core#42) | El tipo de petición debe llegar al título del PR para que la versión sea honesta |
 | Revisor en rojo sobre lo autorizado | No leía los comentarios del PR | Bloque de decisiones (core#43) | Un aviso que se ignora a menudo deja de proteger |
@@ -1175,18 +1222,19 @@ El caso de inyección prueba el diseño en dos niveles. El modelo detectó el in
 
 | Métrica | Valor |
 |---|---|
-| Tareas completadas | 16 de 18 (1, 2, 3, A, 4, 5, 6, 7, 8, F, 9, 10, B, 11, C y D) |
-| PRs fusionados | 80 (25 en core, 34 en app y 21 en gitops; diez abiertos por el agente en app, doce promociones y cuatro de Dependabot), más la documentación |
-| Pruebas automáticas | 343 superadas en `main` (57 de harness y triage, 23 de gobierno de PRs, 47 de los agentes en Actions, 8 de la cadena de suministro, 7 de la promoción, 23 de las versiones y la trazabilidad, 8 de las evals, 22 de la observabilidad y 148 de la aplicación), más 10 casos de reglas de alerta |
+| Tareas completadas | 17 de 18 (1, 2, 3, A, 4, 5, 6, 7, 8, F, 9, 10, B, 11, C, D y E) |
+| PRs fusionados | 85 (26 en core, 36 en app y 23 en gitops; doce abiertos por el agente en app, trece promociones y cuatro de Dependabot), más la documentación |
+| Pruebas automáticas | 377 superadas en `main` (57 de harness y triage, 23 de gobierno de PRs, 49 de los agentes en Actions, 8 de la cadena de suministro, 7 de la promoción, 24 de las versiones y la trazabilidad, 8 de las evals, 25 de la observabilidad y Flujo ALM y 176 de la aplicación), más 10 casos de reglas de alerta |
 | Evals de los agentes | 13 casos; 13/13 con sonnet y con haiku (0,35 frente a 0,03 USD equivalentes por ronda) |
-| Iteraciones registradas con el asistente | 144 |
+| Iteraciones registradas con el asistente | 153 |
 | Versiones publicadas | core hasta `v1.9.x` (automáticas) y app `v1.0.0` y `v2.0.0` (con trazabilidad) |
 | Tiempo de una feature con el agente autónomo | 25 minutos de la petición al cierre (issue #18), con cuatro decisiones humanas; 25 minutos de `aprobado` a cierre en un issue abierto por una alerta (#29), con cinco |
 | Alertas convertidas en issues | 2 (una cerrada sin trabajo, otra resuelta por el agente y desplegada) |
-| Problemas de entorno resueltos | 40 |
+| Problemas de entorno resueltos | 44 |
+| Tiempo de la petición a staging (v2.0.0) | 2,3 h la #36 y 0,4 h la #40, según la tabla de trazabilidad |
 | Vulnerabilidades de diseño detectadas antes de explotarse | 2 (aprobación imposible sin identidad propia; herencia de credenciales) |
 
-> Este capítulo se ampliará con las iteraciones y pruebas de la tarea 12 y de la extensión E.
+> Este capítulo se ampliará con las iteraciones y pruebas de la tarea 12.
 
 # Documentación técnica reproducible
 
@@ -1395,7 +1443,13 @@ for i in $(seq 1 60); do curl -s -o /dev/null "localhost:8000/api/v1/productos?q
 3. Cuando pase la fecha y el panel de v1 marque 0 (o una persona decida adelantarla y lo deje escrito), abrir la petición de retirada con el tipo «Retirar algo». El agente titula la implementación con `feat!:`.
 4. En app: *Actions → release → Run workflow*. La versión sube la mayor y la retirada aparece en «Cambios incompatibles».
 
-> Los pasos de la tarea 12 y de la extensión E se añadirán al completarlas.
+### Extensión E. Trazabilidad y visibilidad del proceso
+
+1. En core: `trazabilidad.py` y su paso en `reusable-release.yml`. En app: conceder `pull-requests`, `issues` y `checks` de lectura al job de `release.yml`. La siguiente *Run workflow* de `release` añade la tabla de trazabilidad y `trazabilidad.json`.
+2. En gitops: `estado_alm.py`, `flujo_alm.py`, `flujo.html` y sus manifiestos en `cluster/observabilidad`, el panel `proceso.json` y las reglas del grupo `proceso-alm` con la ruta `ambito="proceso"` hacia un receptor vacío. Usan el Secret `observabilidad-github` que ya existe.
+3. Abrir `http://localhost:8088` (Flujo ALM) y, en Grafana, «Proceso ALM». Si no hay datos, `http://localhost:8088/api/salud` dice por qué.
+
+> Los pasos de la tarea 12 se añadirán al completarla.
 
 ## Estructura de los repositorios
 
@@ -1456,6 +1510,8 @@ poc-almagentic-gitops/
 | `@claude` hace el cambio pero el bot dice que no ha podido completarlo y el job falla en «Post Run setup-uv» | Desactivar la caché de setup-uv en los jobs del agente (core#37) y repetir el comentario |
 | Dependabot abre saltos mayores de acciones que el resto de workflows no usan | Fijar ese workflow por SHA como los demás y cerrar los PRs |
 | Varias promociones abiertas en conflicto | Fusionar solo la más reciente: incluye las anteriores |
+| Flujo ALM no muestra datos | Ver `localhost:8088/api/salud`; con un 403, añadir *Pull requests* y *Contents* de lectura al token y reiniciar el despliegue |
+| La trazabilidad dice «todavía no» en staging | Falta aprobar la promoción que contiene el commit de la versión |
 | `image / build` falla con exit 22 tras retirar una ruta | La prueba de humo de core no debe exigir un estado concreto (core#41) |
 | El agente deja tests en rojo y dice que no puede tocarlos | Leer su explicación en el PR; si procede, autorizar con `@claude` qué tests puede adaptar |
 | La versión de una retirada sale menor | Fusionar un PR con `!` en el título antes de lanzar `release` |
@@ -1482,6 +1538,7 @@ poc-almagentic-gitops/
 13. En un ALM agéntico, el mantenimiento incluye a los agentes. Dependabot mantiene las dependencias de la aplicación, pero los agentes dependen también del modelo, de la versión de Claude Code, de las acciones y del sistema del runner. Dos veces un cambio externo desactivó una pieza del agente sin que fallara ningún check. Las evals cubren el cambio de modelo, y queda pendiente una prueba de humo para el resto.
 
 14. Para retirar una versión hacen falta datos además de una fecha. La fecha de `Sunset` avisa a los clientes; el tráfico dice si se puede retirar, y quien decide adelantarla o retrasarla es una persona que deja la decisión escrita en la petición. El agente hizo el trabajo mecánico de las dos peticiones; lo difícil fue lo que tuvo que decidir una persona: la moneda, la contradicción de la spec y el número de la versión.
+15. La visibilidad del proceso forma parte del gobierno. Con agentes que trabajan solos, la persona solo decide bien si ve a tiempo qué le toca, y solo puede rendir cuentas si después puede reconstruir qué pasó. La trazabilidad encontró desviaciones (merges con bypass, avisos ignorados) que ninguna revisión había detectado, y Flujo ALM convirtió el estado de tres repositorios en una cola de acciones concretas.
 
 ## Trabajo futuro
 

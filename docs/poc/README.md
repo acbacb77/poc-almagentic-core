@@ -2,7 +2,7 @@
 
 Registro de todo lo hecho en la POC: decisiones, pasos manuales, PRs y problemas resueltos. Se actualiza al cerrar cada tarea, junto con la [memoria del TFM](../tfm/README.md), que es requisito para cerrar la POC.
 
-**Última actualización:** 25 de octubre de 2026 · **Avance:** 16 de 18 tareas (1, 2, 3, A, 4, 5, 6, 7, 8, F, 9, 10, B, 11, C y D)
+**Última actualización:** 7 de noviembre de 2026 · **Avance:** 17 de 18 tareas (1, 2, 3, A, 4, 5, 6, 7, 8, F, 9, 10, B, 11, C, D y E)
 
 **Cada tarea tiene sus prerrequisitos manuales y sus subtareas en orden.** **Leyenda de responsables:** Usuario 👤 (acción manual) · Claude 🤖 (sesión de trabajo) · Agente (bot `almagentic-agent` en el devcontainer) · Automático ⚙️ (GitHub Actions, Argo CD)
 
@@ -76,7 +76,7 @@ Las tareas con letra son **extensiones ALM**: se añadieron al plan original y s
 | **11** | Cerrar el loop de operación | Principal | ✅ Hecha |
 | ↳ C | Mantenimiento continuo | Extensión ALM (entre 11 y 12) | ✅ Hecha |
 | ↳ D | Retirada de un endpoint v1 | Extensión ALM (entre 11 y 12) | ✅ Hecha |
-| ↳ E | Trazabilidad y cuadro de mando del proceso | Extensión ALM (entre 11 y 12) | ⏭️ Siguiente |
+| ↳ E | Trazabilidad y cuadro de mando del proceso | Extensión ALM (entre 11 y 12) | ✅ Hecha |
 | **12** | Guion y ensayo de la demo | Principal | Pendiente |
 
 ---
@@ -648,11 +648,11 @@ Prometheus vigila la API en staging. Una alerta llega por Alertmanager a un puen
 
 ---
 
-> ## ↳ Tarea E · Trazabilidad y cuadro de mando del proceso ⏭️
+> ## ↳ Tarea E · Trazabilidad y cuadro de mando del proceso ✅
 >
 > **Extensión ALM** · se ejecuta entre la tarea 11 y la 12.
 >
-> Cada release enlaza petición, decisión, spec, PRs, revisiones, checks y despliegue. Un cuadro de mando muestra en qué fase está cada petición, qué espera a una persona y qué ha fallado.
+> Cada Release enlaza petición, decisión, spec, PRs, revisiones, checks y despliegue. La aplicación Flujo ALM (localhost:8088) muestra en vivo en qué etapa está cada petición, qué te toca y qué ha fallado; Grafana añade las métricas y alertas del proceso.
 >
 > ### Prerrequisitos manuales
 >
@@ -664,9 +664,18 @@ Prometheus vigila la API en staging. Una alerta llega por Alertmanager a un puen
 > |---|---|---|---|---|
 > | E.1 | Trazabilidad en cada Release (trazabilidad.py y trazabilidad.json) | Claude 🤖 | ✅ | [core#39](https://github.com/acbacb77/poc-almagentic-core/pull/39) · [app#39](https://github.com/acbacb77/poc-almagentic-app/pull/39) |
 > | E.2 | Colector del proceso, panel «Proceso ALM» y alertas del proceso en Grafana | Claude 🤖 | ✅ | [gitops#22](https://github.com/acbacb77/poc-almagentic-gitops/pull/22) |
-> | E.3 | Panel «Flujo ALM» (artifact) y su generador | Claude 🤖 | ✅ | [core#40](https://github.com/acbacb77/poc-almagentic-core/pull/40) |
-> | E.4 | Primera Release con trazabilidad: v2.0.0 | Usuario 👤 | ✅ |  |
-> | E.5 | Decidir cómo se refresca Flujo ALM y cerrar la tarea | Usuario 👤 | ⬜ |  |
+> | E.3 | Primera Release con trazabilidad: v2.0.0 | Usuario 👤 | ✅ |  |
+> | E.4 | Panel «Flujo ALM» como página publicada (foto de datos; tres diseños) | Claude 🤖 | ✅ | [core#40](https://github.com/acbacb77/poc-almagentic-core/pull/40) |
+> | E.5 | Flujo ALM como aplicación del clúster, en vivo con ETag | Claude 🤖 | ✅ | [gitops#29](https://github.com/acbacb77/poc-almagentic-gitops/pull/29) |
+> | E.6 | El revisor lee las decisiones; la trazabilidad distingue PRs propios | Claude 🤖 | ✅ | [core#43](https://github.com/acbacb77/poc-almagentic-core/pull/43) |
+>
+> ### Detalle
+>
+> **Decisiones**: el cuadro de mando vive en el clúster (es lo único que ve a la vez GitHub y Argo CD); la trazabilidad va en cada Release; las alertas del proceso solo se ven en Grafana y no abren issues.
+>
+> **Dónde mirar**: **Flujo ALM** en `localhost:8088` (una fila por petición, sus 8 etapas en columnas, la cola «Lo que te toca» y una ficha por casilla; `/api/salud` dice si la última lectura de GitHub funcionó). **Proceso ALM** en Grafana para métricas DORA y alertas. Cada Release de app termina con la tabla de trazabilidad y lleva `trazabilidad.json`.
+>
+> **Qué se aprendió**: una página publicada no puede llamar a la API de GitHub (la CSP lo bloquea y no hay conector), así que la vista en vivo tenía que ser una aplicación. Las peticiones condicionales (ETag) bajan el gasto de cuota de unas 200 consultas por vuelta a unas 9. La trazabilidad sacó algo que nadie había visto: varios PRs se fusionaron con bypass porque un commit posterior descartó la aprobación.
 
 ---
 
@@ -740,6 +749,10 @@ _Subtareas previstas: se ajustarán al llegar a la tarea._
 | El agente deja 22 tests en rojo y dice que no puede tocarlos | La spec 005 pedía sustituir los tests de v1 y no tocar los de v2, que comparaban con v1 | Autorizar con `@claude` qué tests puede adaptar y que corrija la spec |
 | La versión con una retirada sale como 1.x en vez de 2.0.0 | El PR de la retirada se tituló `feat:` | `docs!:` en un PR posterior (app#43); el agente ya titula las retiradas con `feat!:` (core#42) |
 | La Release no aparece | En app las versiones se lanzan a mano | *Actions → release → Run workflow* en `main` |
+| Una página publicada en claude.ai no muestra datos de GitHub en vivo | La CSP del visor bloquea cualquier llamada a `api.github.com` y no hay conector de GitHub | Flujo ALM como aplicación del clúster (gitops#29); la página publicada queda como foto |
+| Flujo ALM o «Proceso ALM» sin datos | El token de solo lectura no llega o le falta algún permiso | `localhost:8088/api/salud` muestra el error; si es un 403, añadir *Pull requests* y *Contents* de lectura al token y reiniciar el despliegue |
+| Ficheros `__pycache__` en gitops | Se subieron con `git add -A`; gitops no tiene el check `governance` | Borrados y `.gitignore` (gitops#29) |
+| La trazabilidad marca «bypass» en un PR propio | GitHub no deja aprobar un PR propio | Se muestra como «PR propio» (core#43) |
 
 ---
 

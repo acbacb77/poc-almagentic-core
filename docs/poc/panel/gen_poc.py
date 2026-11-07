@@ -204,14 +204,15 @@ TASKS = [
                ("La retirada es incompatible: docs! y feat! en el agente", "claude", True, [pr("app", 43), pr("core", 42)]),
                ("Versión 2.0.0 con trazabilidad", "usuario", True, []),
                ("El revisor tiene en cuenta las decisiones del PR", "claude", False, [pr("core", 43)])]),
-    dict(id="E", title="Trazabilidad y cuadro de mando del proceso", phase="Gobierno", status="next",
-         desc="Cada release enlaza petición, decisión, spec, PRs, revisiones, checks y despliegue. Un cuadro de mando muestra en qué fase está cada petición, qué espera a una persona y qué ha fallado.",
+    dict(id="E", title="Trazabilidad y cuadro de mando del proceso", phase="Gobierno", status="done",
+         desc="Cada Release enlaza petición, decisión, spec, PRs, revisiones, checks y despliegue. La aplicación Flujo ALM (localhost:8088) muestra en vivo en qué etapa está cada petición, qué te toca y qué ha fallado; Grafana añade las métricas y alertas del proceso.",
          prereqs=[],
          subs=[("Trazabilidad en cada Release (trazabilidad.py y trazabilidad.json)", "claude", True, [pr("core", 39), pr("app", 39)]),
                ("Colector del proceso, panel «Proceso ALM» y alertas del proceso en Grafana", "claude", True, [pr("gitops", 22)]),
-               ("Panel «Flujo ALM» (artifact) y su generador", "claude", True, [pr("core", 40)]),
                ("Primera Release con trazabilidad: v2.0.0", "usuario", True, []),
-               ("Decidir cómo se refresca Flujo ALM y cerrar la tarea", "usuario", False, [])]),
+               ("Panel «Flujo ALM» como página publicada (foto de datos; tres diseños)", "claude", True, [pr("core", 40)]),
+               ("Flujo ALM como aplicación del clúster, en vivo con ETag", "claude", True, [pr("gitops", 29)]),
+               ("El revisor lee las decisiones; la trazabilidad distingue PRs propios", "claude", True, [pr("core", 43)])]),
     dict(id="12", title="Guion y ensayo de la demo", phase="Gobierno", status="todo",
          desc="Narrativa, métricas, plan B grabado y cierre de la memoria del TFM (requisito para finalizar la POC).",
          prereqs=[],
@@ -337,6 +338,11 @@ DETAILS = {
 **Versiones de la app** (repo `poc-almagentic-app`): *Actions → release → Run workflow* sobre `main`, después de que `supply-chain` termine para ese commit. Si falla con «Nada que publicar», desde la última versión solo hubo documentación o pruebas; con «Imagen no publicada», espera a `supply-chain`.
 
 **Primera versión**: `v1.0.0` = `ghcr.io/acbacb77/poc-almagentic-app@sha256:8ace64ae…` (commit `3898e7c`), desplegada con gitops#6.""",
+    "E": """**Decisiones**: el cuadro de mando vive en el clúster (es lo único que ve a la vez GitHub y Argo CD); la trazabilidad va en cada Release; las alertas del proceso solo se ven en Grafana y no abren issues.
+
+**Dónde mirar**: **Flujo ALM** en `localhost:8088` (una fila por petición, sus 8 etapas en columnas, la cola «Lo que te toca» y una ficha por casilla; `/api/salud` dice si la última lectura de GitHub funcionó). **Proceso ALM** en Grafana para métricas DORA y alertas. Cada Release de app termina con la tabla de trazabilidad y lleva `trazabilidad.json`.
+
+**Qué se aprendió**: una página publicada no puede llamar a la API de GitHub (la CSP lo bloquea y no hay conector), así que la vista en vivo tenía que ser una aplicación. Las peticiones condicionales (ETag) bajan el gasto de cuota de unas 200 consultas por vuelta a unas 9. La trazabilidad sacó algo que nadie había visto: varios PRs se fusionaron con bypass porque un commit posterior descartó la aprobación.""",
     "D": """**Decisiones**: precio v2 `{"importe": "12.50", "moneda": "EUR"}` (texto decimal e ISO 4217; la moneda es del catálogo); criterio de retirada fecha de Sunset + sin tráfico a v1 (paneles «Consultas por versión» y «Consultas a v1 en 24 h»); v1 retirada responde 410 Gone con `Link` a v2. El responsable adelantó la retirada al 25-10 (Sunset anunciado: 28-10): queda escrito en la petición #40.
 
 **Qué pasó por el camino**: el revisor marcó dos veces como incumplimiento cambios que el responsable había autorizado en el PR (no leía los comentarios: core#43). La spec 005 se contradecía (sustituir los tests de v1 y no tocar los de v2, que comparaban con v1): el agente paró y lo explicó, y una persona lo autorizó con `@claude`. La prueba de humo de core tenía `/api/v1` escrito a fuego (core#41). Y la retirada salió como `feat:`, que habría dado 1.1.0: con `docs!:` (app#43) salió la 2.0.0, y el agente ya marca así las retiradas (core#42).
